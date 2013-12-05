@@ -1,0 +1,784 @@
+Program AshamanHerblore;
+  {$DEFINE SMART}
+  {$I SRL-6/SRL.Simba}
+
+///////////////////////////////////////////////////////////////////////
+//                                                                   //
+//                  Begin of user setup                              //
+//                Fill in the fields below                           //
+//                                                                   //
+///////////////////////////////////////////////////////////////////////
+
+Const
+  {Break Settings}
+  TakeBreaks   = True;    // ***Do you want to take breaks?***
+  SwitchWorlds = False;   // ***Switch worlds after a break?***
+  BreakIn      = 600;     // ***How long before we take a break? (minutes)***
+  BreakFor     = 15;      // ***How long will we break for? (minutes)***
+  Bir          = 13;      // ***Random minutes to add/subtract from how long until we break***
+  Bfr          = 7;       // ***Random minutes to add/subjtract from break duraction***
+
+  {Method Settings}
+  CleanOrPots = 'Pots';   // ***'Clean': Grimy Herbs top right bank spot***
+                          // ***'Pots' : (Unf) Clean Herbs are top right bank spot, Water Vials 2nd from top right bank spot
+                          //             (Finished) Non-edidable ingredient is top right spot***
+
+  {Other Settings}
+  XPPerItem    = 4;       // ***XP functions broken, how much xp do you get per item (round)?***
+  QuickKey     = 0;       // ***What is the key you've set the herbs to? Don't f this up! (only for clean method)***
+
+Procedure DeclarePlayers;
+Begin
+  Players.Setup(['Player1'], 'PlayerList'); //***Fill this out, Player1 = Name of the account in player manager, PlayerList = name of the player file***
+  SetLength(Players,1);
+
+  //***If NOT using the player manager, fill out the loginname and password below, otherwise ignore those two***
+  With players[0] Do
+  Begin
+  // loginName := '';      {Remove the "//" from this line if you arent using player manager}
+  // password := '';       {Remove the "//" from this line if you arent using player manager}
+    IsActive := True;
+    World := 96;           {Remove the "//" from this line if you want to set a world to login to}
+   // BankPin := ;         {Remove the "//" from this line if you arent using player manager and you have a pin}
+  End;
+  CurrentPlayer := 0;
+End;
+
+///////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                       //
+//                            End of user setup                                          //
+//           Don't touch below this line unless you know what you're doing!!             //
+//                                                                                       //
+///////////////////////////////////////////////////////////////////////////////////////////
+
+Var
+  ItemCount,XP,StartingExperience,Slot: Integer;
+  Timeout,CurrentBTime: TTimeMarker;
+  W,X,Y,Z,RealBTime,BreakRounds,TotalBreaks: Integer;
+  ItemsPH,XPH: Extended;
+
+Const
+  ScriptVersion = '1.1';
+  Debug = False;
+
+{*******************************************************************************
+Function AutoupdateMe;
+By: Shuttleu
+Edited By: Ashaman88
+Description: Autoupdates Script.
+*******************************************************************************}
+Procedure AutoUpdateMe;
+Var
+  Neifile: Integer;
+  OnlineVersion, NewScript, NeiFeilNennen: String;
+Begin
+  Writeln('Checking for script updates...');
+  OnlineVersion := GetPage('http://ashamanbonfire.googlecode.com/git/Version.txt');
+  Writeln(OnlineVersion);
+  Writeln(ScriptVersion)
+  If (trim(OnlineVersion) > ScriptVersion) Then
+  Begin
+    WriteLn('Newer script version online!');
+    WriteLn('Autoupdating to newer version.');
+    NewScript := GetPage('http://ashamanbonfire.googlecode.com/git/AshamanBonfire.simba');
+    NeiFeilNennen := ScriptPath+ 'AshamanBonfire V'+OnlineVersion+'.simba';
+    Neifile := Rewritefile(NeiFeilNennen, true);
+    Try
+      WriteFileString(Neifile, NewScript);
+    Except
+      Begin
+        WriteLn('Fatal error writing to '+NeiFeilNennen+'!!');
+        Terminatescript;
+      End;
+    End;
+    CloseFile(Neifile);
+    WriteLn('New script downloaded to '+NeiFeilNennen+'!! Please use this one!!');
+    TerminateScript;
+  End Else
+    WriteLn('You have the latest version of the script!');
+End;
+
+Procedure FindNormalRandoms;
+Begin
+  ExitSquealOfFortune;
+  ClaimSpinTicket;
+End;
+
+//by Home
+function AreaToBoxArray(const AreaX1, AreaY1, AreaX2, AreaY2, Width, Height: Integer): TBoxArray;
+var
+  AreaW, AreaH: Integer;
+  BoxX, BoxY: Integer;
+  x, y, i: Integer;
+begin
+  // Calculate the area dimensions
+  AreaW := AreaX2 - AreaX1 + 1;
+  AreaH := AreaY2 - AreaY1 + 1;
+
+  // Calculate the number of boxes in each dimension
+  BoxX := AreaW div Width;
+  if AreaW mod Width <> 0 then Inc(BoxX);
+  BoxY := AreaH div Height;
+  if AreaH mod Height <> 0 then Inc(BoxY);
+
+  // Set the number of boxes
+  SetLength(Result, BoxX * BoxY);
+
+  // Calculate the boxes
+  i := 0;
+  for y := 0 to BoxY - 1 do
+    for x := 0 to BoxX - 1 do
+    begin
+      Result[i] := IntToBox(AreaX1 + x * Width,
+        AreaY1 + y * Height,
+        Min(AreaX2, AreaX1 + (x + 1) * Width - 1),
+        Min(AreaY2, AreaY1 + (y + 1) * Height - 1));
+      Inc(i);
+    end;
+end;
+
+Procedure CheckMovingObjs(RClick: Boolean);
+var
+  TBA: TBoxArray;
+  MidBox: TPoint;
+  TIA: TIntegerArray;
+  H,I,J,X,Y,T: Integer;
+  TPA,PBox: TPointArray;
+begin
+  if not IsLoggedIn then Exit;
+
+  SetColorToleranceSpeed(1);
+  SetToleranceSpeed2Modifiers(0.2, 0.2);
+
+  PBox := TPAFromBox(MainScreen.PlayerBox);
+  TBA := AreaToBoxArray(Mainscreen.X1, Mainscreen.Y1, Mainscreen.X2, Mainscreen.Y2, 35, 35);
+  TIA := GetPixelShift(TBA, 300);
+
+  for H := 0 to High(TBA) do
+  begin
+    if (TIA[H] > 100) then
+    begin
+      MidBox := MiddleBox(TBA[H]);
+      SetArrayLength(TPA, Length(TPA)+1);
+      TPA[High(TPA)] := MidBox;
+    end;
+  end;
+
+  ClearTPAFromTPAWrap(TPA, PBox, TPA);
+  if (Length(TPA) < 1) then Exit;
+
+  I := Random(Length(TPA));
+  Mouse(Point(TPA[I].X+GaussRangeInt(-10,10), TPA[I].Y+GaussRangeInt(-10,10)),Mouse_Move,Mouse_Human);
+
+  if RClick then
+  begin
+    FastClick(Mouse_Right);
+    if (chooseOption.isOpen(500)) then
+      J := Length(ChooseOption.__getOptions());
+    Wait(GaussRangeInt(J*75, J*120));
+
+    ChooseOption.Close
+  end;
+  SetArrayLength(TPA,0);
+end;
+
+Function HerbMenu: Boolean;
+Begin
+  Result:= CountColorTolerance(697806,IntToBox(246,39,332,56),63) > 300
+  If Debug Then
+    If Result Then
+      Writeln('HerbMenu Present') Else
+      Writeln('HerbMenu Not Present');
+End;
+
+Function Antiban: Boolean;
+Var
+  I: Integer;
+Begin
+  I := Random(600);
+  Case I Of
+    1..3:
+      Begin
+        MouseOffClient(Random(4));
+        Result := True;
+      End;
+    4..7:
+      Begin
+        TabStats.GetSkillLevel(Skill_Herblore,SKILL_DYNAMIC);
+        Wait(GaussRangeInt(1000,2000));
+        TabBackpack.Open;
+        Result := True;
+      End;
+    8..50:
+      Begin
+        CheckMovingObjs(False);
+        Result := True;
+      End;
+    51..200:
+      Begin
+        SleepAndMoveMouse(GaussRangeInt(400,500));
+        Result:=True;
+      End;
+    201..400:
+      Begin
+        MouseOffClient(4);
+        Result:=True;
+      End;
+    401..600:
+      Begin
+        Wait(RandomRange(250, 1500));
+        Result:=True;
+      End;
+  End;
+  Wait(GaussRangeInt(1000, 5000));
+End;
+
+Function StatusMenu: Boolean;
+Var
+  CTS: Integer;
+Begin
+  Result:= CountColorTolerance(697806,IntToBox(244,77,333,96),63) > 300
+  If Debug Then
+    If Result Then
+      Writeln('StatusMenu Present') Else
+      Writeln('StatusMenu Not Present');
+End;
+
+Procedure ProgressReport;
+Var
+  TTB: Integer;
+Begin
+  ClearDebug;
+
+  TTB := (((W) + (Y) + BreakRounds)-GetTimeRunning);
+
+  ItemCount := ItemCount;
+  XP := (ItemCount * XPPerItem);
+  XPH := Round(XP * (3600.0 / (GetTimeRunning / 1000.0)));
+  ItemsPH := Round((ItemCount * (3600.0 / (GetTimeRunning / 1000.0))));
+
+  Writeln('========AshamanHerblore=========');
+  Writeln('==========Version: '+ScriptVersion+'==========');
+  Writeln('Time Running: ' + TimeRunning);
+  Writeln('Items Made: ' + IntToStr(ItemCount));
+  Writeln('Experience Earned: ' + IntToStr(XP));
+  Writeln('Experience/Hour: ' + ToStr(XPH));
+  Writeln('Items/H: ' + ToStr(ItemsPH));
+  Writeln('================================');
+
+  If TakeBreaks Then
+    Writeln('Time until break: '+MsToTime(TTB, Time_Bare));
+End;
+
+Function BreakHandler(BreakIn, BreakFor, randBreakIn, randBreakFor: Integer): Boolean;
+Var
+  H,M,S: Integer;
+Begin
+  If Not IsLoggedIn Then
+    Exit;
+
+  If (GetTimeRunning < ((W) + (Y) + BreakRounds)) Then
+    Exit Else
+    If (GetTimeRunning > ((W) + (Y) + BreakRounds)) Then
+    Begin
+      RealBTime := Round((X+Z)/60000);
+      Writeln('Taking a break for about ' + IntToStr(RealBTime) + ' minutes.');
+      Players[CurrentPlayer].Logout;
+      CurrentBTime.Reset;
+      CurrentBTime.Start;
+      Repeat
+        Wait(21000);
+        ConvertTime((X+Z)-CurrentBTime.GetTime,H,M,S);
+        Writeln('Breaktime left: '+IntToStr(H)+':'+IntToStr(M)+':'+IntToStr(S));
+      Until(CurrentBTime.GetTime>(X+Z));
+      Writeln('Logging in.');
+      Players[CurrentPlayer].Login;
+      Wait(4000);
+      Timeout.Reset;
+      Timeout.Start;
+      Result := IsLoggedIn;
+      Minimap.ClickCompass;
+      MainScreen.SetAngle(MS_ANGLE_HIGH);
+      IncEx(BreakRounds, (W) + (X));
+      Inc(TotalBreaks);
+      Writeln('The next break will occur in about ' + IntToStr(BreakIn) + ' minutes.');
+      W := (BreakIn * 60000);
+      X := (BreakFor * 60000);
+      Y := RandomRange(-BIR * 60000, BIR * 60000);
+      Z := RandomRange(-BFR * 60000, BFR * 60000);
+    End;
+End;
+
+Function OpenBank: Boolean;
+Var
+  X,Y,H,I,CTS,Time: Integer;
+  T: TTimeMarker;
+  ChestBox: TBox;
+  TPA,TPA2: TPointArray;
+  ATPA,ATPA2: T2DPointArray;
+  TBA: TBoxArray;
+  MBP: TPoint;
+Begin
+  Result := False;
+
+  If Not IsLoggedIn Then
+    Exit;
+
+  Result:= BankScreen.IsOpen Or PinScreen.IsOpen;
+  If Result Then
+  Begin
+    SetLength(ATPA,0);
+    SetLength(TPA,0);
+    Exit;
+  End;
+
+  If (ChooseOption.OptionsExist(['Exam','mine','Examine','Canc','ncel','Cancel'],400)) Then
+  Begin
+    If Debug Then
+      Writeln('Closing options menu');
+    MouseBox(TabBackpack.GetBounds,Mouse_Move);
+  End;
+
+  CTS := GetToleranceSpeed;
+  SetColorToleranceSpeed(2);
+
+  SetToleranceSpeed2Modifiers(0.08,0.05);
+  FindColorsSpiralTolerance(MainScreen.PlayerPoint.X,MainScreen.PlayerPoint.Y,TPA,7499110,MainScreen.GetBounds.X1,MainScreen.GetBounds.Y1,MainScreen.GetBounds.X2,MainScreen.GetBounds.Y2,18);
+  SetColorToleranceSpeed(CTS);
+  SetToleranceSpeed2Modifiers(0.2,0.2);
+
+  ATPA := TPAtoATPAEx(TPA,10,25);
+  SortATPAFromFirstPointY(ATPA,Point(316,195));
+
+  If (Length(ATPA) = 0) Then
+  Begin
+    If Debug Then
+      Writeln('No booth found.');
+    Exit;
+  End;
+
+  If Debug Then
+    Try
+      debugATPA(ATPA);
+    Except
+      Writeln('Box out of bounds');
+    End;
+
+  H := High(ATPA);
+
+  For I:= 0 To H Do
+  Begin
+    If (Length(ATPA[I]) < 10) Or (Length(ATPA[I]) > 150)  Then
+      Continue;
+
+    If Debug Then
+      Writeln('Silver Chest Length: '+ToStr(Length(atpa[i]))+' for I:= '+ToStr(I));
+
+    ChestBox := GetTPABounds(ATPA[I]);
+    ChestBox := IntToBox(Max(ChestBox.X1-8,0),Max(ChestBox.Y1-5,0),Min(ChestBox.X2+5,Mainscreen.X2),Min(ChestBox.Y2+5,Mainscreen.Y2));
+
+    With ChestBox Do
+    Begin
+      If Not IsLoggedIn Then
+        Exit;
+
+   //   SetColorToleranceSpeed(2);
+     // SetToleranceSpeed2Modifiers(0.00,0.00);
+      FindColorsSpiralTolerance(MainScreen.PlayerPoint.X,MainScreen.PlayerPoint.Y,TPA2,988185,ChestBox.X1,ChestBox.Y1,ChestBox.X2,ChestBox.Y2,3);
+      SetColorToleranceSpeed(CTS);
+      SetToleranceSpeed2Modifiers(0.2,0.2);
+
+      If Debug Then
+        Writeln('Black Chest Length: '+ToStr(Length(TPA2))+' for I:= '+ToStr(I));
+
+      If Length(TPA2) > 40 Then
+      Begin
+        SetArrayLength(TBA, Length(TBA)+1);
+        TBA[High(TBA)] := ChestBox;
+      End;
+    End;
+  End;
+
+  If Debug Then
+  Try
+    SmartImage.Clear;
+    SmartImage.DrawBoxes(TBA, False, clRed);
+  Except
+    Writeln('Failed Drawing Boxes.');
+  End;
+
+  SetLength(TPA,0);
+  SetLength(ATPA,0);
+  SetLength(TPA2,0);
+  SetLength(ATPA2,0);
+
+  For H := 0 To High(TBA) Do
+  Begin
+    MBP := MiddleBox(TBA[H]);
+
+    If (ChooseOption.OptionsExist(['Exam','mine','Examine','Canc','ncel','Cancel'],400)) Then
+    Begin
+      If Debug Then
+        Writeln('Closing options menu');
+      MouseBox(TabBackpack.GetBounds,Mouse_Move);
+    End;
+
+
+    Result:= BankScreen.IsOpen Or PinScreen.IsOpen;
+    If Result Then
+      Break;
+
+    MBP := MiddleBox(TBA[H]);
+
+    Mouse(Point(MBP.X+GaussRangeInt(-10,10),MBP.Y+GaussRangeInt(-10,10)),Mouse_Move,Mouse_Human);
+
+    If (IsMouseOverText(['Open','pen','chest','ches','hest'],300)) Then
+    Begin
+      If Debug Then
+        Writeln('Found chest, Clicking.');
+
+      FastClick(Mouse_Right);
+
+      If ChooseOption.Select(['Open','chest'],RandomRange(700,900)) Then
+      Begin
+        Time:=GaussRangeInt(3000,8000);
+        T.Start;
+        Repeat
+          If Not IsLoggedIn Then
+            Exit;
+          If T.GetTime>Time Then
+          Begin
+            If Debug Then
+              Writeln('Took too long to open chest');
+            SetLength(ATPA,0);
+            SetLength(TPA,0);
+            Exit;
+          End;
+          Wait(Random(100));
+        Until BankScreen.IsOpen Or PinScreen.IsOpen;
+        SetLength(ATPA,0);
+        SetLength(TPA,0);
+        Result:=True;
+        Exit;
+      End;
+    End;
+  End;
+  SetLength(ATPA,0);
+  SetLength(TPA,0);
+End;
+
+
+Function Banking: Boolean;
+Var
+  T,T2: TTimeMarker;
+  Time,Time2: Integer;
+Begin
+  If Not IsLoggedIn Then
+    Exit;
+  T.Start;
+  Time:=GaussRangeInt(15000, 24000);
+  Repeat
+    Wait(Random(100));
+    If BankScreen.IsOpen Then
+      Break;
+    If IsMouseOverText(['Bank','Use',' chest','chest']) Then
+    Begin
+      FastClick(Mouse_Left);
+      T2.Start;
+      Time2:=GaussRangeInt(8000, 12000);
+      Repeat
+        Wait(GaussRangeInt(0, 1500));
+        If T2.GetTime>Time Then
+          Break;
+      Until BankScreen.IsOpen Or PinScreen.IsOpen;
+      If PinScreen.IsOpen Then
+        PinScreen.Enter(Players[CurrentPlayer].BankPin);
+      If PinScreen.IsOpen Or BankScreen.IsOpen Then
+        Break;
+    End;
+    If OpenBank Then
+      Break;
+    If (T.GetTime>Time) Or (Not IsLoggedIn) Then
+      Exit;
+  Until (BankScreen.IsOpen Or Pinscreen.IsOpen);
+
+  If BankScreen.GetPackCount > 0 Then
+    BankScreen.QuickDeposit(QUICK_DEPOSIT_INVENTORY);
+
+  Case LowerCase(CleanOrPots) Of
+    'clean':
+    Begin
+      T.Reset;
+      T.Start;
+      Time:=GaussRangeInt(8000, 12000);
+      Repeat
+        If BankScreen.Withdraw(10, WITHDRAW_AMOUNT_ALL, ['']) Then
+          Break;
+        If (T.GetTime>Time) Or (Not IsLoggedIn) Then
+          Exit;
+        Wait(GaussRangeInt(0, 1500));
+      Until False;
+    End;
+
+    'pots':
+    Begin
+      T.Reset;
+      T.Start;
+      Time:=GaussRangeInt(8000, 12000);
+      Repeat
+        If BankScreen.Withdraw(10, 14, ['']) Then
+          Break;
+        If (T.GetTime>Time) Or (Not IsLoggedIn) Then
+          Exit;
+        Wait(GaussRangeInt(0, 1500));
+      Until False;
+
+      T.Reset;
+      T.Start;
+      Time:=GaussRangeInt(8000, 12000);
+      Repeat
+        If BankScreen.Withdraw(9, 14, ['']) Then
+          Break;
+        If (T.GetTime>Time) Or (Not IsLoggedIn) Then
+          Exit;
+        Wait(GaussRangeInt(0, 1500));
+      Until False;
+    End;
+  End;
+
+  BankScreen.Close;
+  Wait(GaussRangeInt(0, 900));
+
+  Case Random(10) Of
+    0..7: Slot:=11;
+    8..9: Slot:=12;
+  End;
+
+  If LowerCase(CleanOrPots)='pots' Then
+    TabBackpack.MouseSlot(Slot, Mouse_Move) Else
+    MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break);
+
+  T.Reset;
+  T.Start;
+  Repeat
+    Wait(GaussRangeInt(0, 900));
+    If (T.GetTime>8000) Then
+    Begin
+      Writeln('Failed withdrawing, shutting down');
+      Players[CurrentPlayer].Logout;
+      TerminateScript;
+    End;
+    If Not IsLoggedIn Then
+      Exit;
+  Until TabBackpack.IsFull;
+  Result := True;
+End;
+
+Function MakeItems: Boolean;
+Var
+  Time,X,Y: Integer;
+  T: TTimeMarker;
+Begin
+  If Not IsLoggedIn Then
+    Exit;
+  TabBackpack.Open;
+  Case LowerCase(CleanOrPots) Of
+    'clean':
+    Begin
+      TypeSend(ToStr(QuickKey),False);
+      Wait(GaussRangeInt(0, 1500));
+      MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break);
+      If Debug Then
+        Writeln('Waiting for HerbMenu');
+      T.Start;
+      Time:=GaussRangeInt(6000, 12000);
+      Repeat
+        Wait(GaussRangeInt(0, 500));
+        If (Not IsLoggedIn) Or (T.GetTime>Time) Then
+          Exit;
+      Until HerbMenu;
+
+      Wait(GaussRangeInt(0, 400));
+
+      If Debug Then
+        Writeln('HerbMenu is here');
+
+      FastClick(Mouse_Left);
+
+      If Debug Then
+        Writeln('Waiting for StatusMenu');
+
+      T.Reset;
+      T.Start;
+      Time:=GaussRangeInt(6000, 12000);
+      Repeat
+        Wait(GaussRangeInt(0, 1500));
+        If (Not IsLoggedIn) Or (T.GetTime>Time) Then
+          Exit;
+      Until StatusMenu;
+
+      Wait(GaussRangeInt(0, 1500));
+
+      Timeout.Reset;
+      Timeout.Start;
+
+      If Debug Then
+        Writeln('StatusMenu is here');
+
+      If Debug Then
+        Writeln('Waiting for StatusMenu to leave');
+
+      T.Reset;
+      T.Start;
+      Time:=GaussRangeInt(25000, 45000);
+      Repeat
+        Wait(GaussRangeInt(1000, 2000));
+        AntiBan;
+        If (Not IsLoggedIn) Or (T.GetTime>Time) Then
+          Exit;
+      Until Not StatusMenu;
+
+      If Debug Then
+        Writeln('StatusMenu is gone');
+      Wait(GaussRangeInt(0, 1500));
+      ItemCount := ItemCount + 28;
+    End;
+    'pots':
+    Begin
+      GetMousePOS(X,Y);
+      If Slot = 0 Then
+        Slot:=1;
+      If Not PointInBox(Point(X,Y),TabBackpack.GetSlotBox(Slot)) Then
+      Begin
+        Case Random(10) Of
+          0..7: Slot:=11;
+          8..9: Slot:=12;
+        End;
+      End;
+      TabBackpack.MouseSlot(Slot, Mouse_Left);
+      Wait(GaussRangeInt(0, 400));
+
+      Case Random(10) Of
+        0..7: Slot:=16;
+        8..9: Slot:=17;
+      End;
+
+      TabBackpack.MouseSlot(Slot, Mouse_Left);
+      Wait(GaussRangeInt(0, 400));
+      MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break);
+
+      T.Reset;
+      T.Start;
+      Time:=GaussRangeInt(6000, 12000);
+      Repeat
+        Wait(GaussRangeInt(0, 500));
+        If (Not IsLoggedIn) Or (T.GetTime>Time) Then
+          Exit;
+      Until HerbMenu;
+
+      Wait(GaussRangeInt(0, 400));
+
+      FastClick(Mouse_Left);
+
+      T.Reset;
+      T.Start;
+      Time:=GaussRangeInt(6000, 12000);
+      Repeat
+        Wait(GaussRangeInt(0, 1500));
+        If (Not IsLoggedIn) Or (T.GetTime>Time) Then
+          Exit;
+      Until StatusMenu;
+
+      Wait(GaussRangeInt(0, 1500));
+
+      Timeout.Reset;
+      Timeout.Start;
+
+      T.Reset;
+      T.Start;
+      Time:=GaussRangeInt(25000, 45000);
+      Repeat
+        Wait(GaussRangeInt(0, 1500));
+        AntiBan;
+        If (Not IsLoggedIn) Or (T.GetTime>Time) Then
+          Exit;
+      Until Not StatusMenu;
+
+      Wait(GaussRangeInt(0, 1500));
+      ItemCount := ItemCount + 14;
+    End;
+    Else
+    Begin
+      Writeln('CleanOrPots type wrong, shutting down');
+      TerminateScript;
+    End;
+  End;
+  Result := True;
+End;
+
+Procedure Setup
+Begin
+  ClearDebug;
+  //AutoUpdateMe;
+
+  SmartEnableDrawing := True;
+  SetupSRL;
+
+  DeclarePlayers;
+  If Not Players[CurrentPlayer].Login Then
+    TerminateScript;
+
+ // If Not Debug Then
+    DisableSRLDebug:=True;
+  ClearDebug;
+ // StartingExperience := GetXPBarTotal;
+
+  MainScreen.SetAngle(MS_ANGLE_HIGH);
+  Minimap.SetAngle(MM_DIRECTION_EAST);
+  FindNormalRandoms;
+
+  Timeout.Start;
+
+  W := (BreakIn * 60000);
+  X := (BreakFor * 60000);
+  Y := RandomRange(-BIR * 60000, BIR * 60000);
+  Z := RandomRange(-BFR * 60000, BFR * 60000);
+End;
+
+Procedure Mainloop;
+Begin
+  If Not IsLoggedIn Then
+    Begin
+       If Not Players[CurrentPlayer].Login Then
+          TerminateScript;
+      MainScreen.SetAngle(MS_ANGLE_HIGH);
+      Minimap.SetAngle(MM_DIRECTION_EAST);
+      Timeout.Reset;
+      Timeout.Start;
+    End;
+
+    If Banking Then
+    Begin
+      FindNormalRandoms;
+      If MakeItems Then
+      Begin
+        ProgressReport;
+        FindNormalRandoms;
+      End;
+    End;
+
+    If Timeout.GetTime>300000 Then
+    Begin
+      Writeln('Nothing has happened for too long, shutting down!');
+      TerminateScript;
+    End;
+
+    If TakeBreaks Then
+      BreakHandler(BreakIn,BreakFor,Bir,Bfr);
+End;
+
+Begin
+  Setup;
+  While (Players.GetActive() > 0) Do
+    Mainloop;
+End.
