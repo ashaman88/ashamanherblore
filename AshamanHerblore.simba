@@ -19,7 +19,7 @@ Const
   Bfr          = 7;       // ***Random minutes to add/subjtract from break duraction***
 
   {Method Settings}
-  CleanOrPots = 'Pots';   // ***'Clean': Grimy Herbs top right bank spot***
+  CleanOrPots = 'Clean';  // ***'Clean': Grimy Herbs top right bank spot***
                           // ***'Pots' : (Unf) Clean Herbs are top right bank spot, Water Vials 2nd from top right bank spot
                           //             (Finished) Non-edidable ingredient is top right spot***
 
@@ -38,7 +38,7 @@ Begin
   // loginName := '';      {Remove the "//" from this line if you arent using player manager}
   // password := '';       {Remove the "//" from this line if you arent using player manager}
     IsActive := True;
-    World := 96;           {Remove the "//" from this line if you want to set a world to login to}
+  //  World := 96;           {Remove the "//" from this line if you want to set a world to login to}
    // BankPin := ;         {Remove the "//" from this line if you arent using player manager and you have a pin}
   End;
   CurrentPlayer := 0;
@@ -58,7 +58,7 @@ Var
   ItemsPH,XPH: Extended;
 
 Const
-  ScriptVersion = '1.1';
+  ScriptVersion = '1.2';
   Debug = False;
 
 {*******************************************************************************
@@ -73,15 +73,15 @@ Var
   OnlineVersion, NewScript, NeiFeilNennen: String;
 Begin
   Writeln('Checking for script updates...');
-  OnlineVersion := GetPage('http://ashamanbonfire.googlecode.com/git/Version.txt');
+  OnlineVersion := GetPage('http://ashamanherblore.googlecode.com/git/Version.txt');
   Writeln(OnlineVersion);
   Writeln(ScriptVersion)
   If (trim(OnlineVersion) > ScriptVersion) Then
   Begin
     WriteLn('Newer script version online!');
     WriteLn('Autoupdating to newer version.');
-    NewScript := GetPage('http://ashamanbonfire.googlecode.com/git/AshamanBonfire.simba');
-    NeiFeilNennen := ScriptPath+ 'AshamanBonfire V'+OnlineVersion+'.simba';
+    NewScript := GetPage('http://ashamanherblore.googlecode.com/git/AshamanHerblore.simba');
+    NeiFeilNennen := ScriptPath+ 'AshamanHerblore V'+OnlineVersion+'.simba';
     Neifile := Rewritefile(NeiFeilNennen, true);
     Try
       WriteFileString(Neifile, NewScript);
@@ -230,7 +230,7 @@ Begin
         Result:=True;
       End;
   End;
-  Wait(GaussRangeInt(1000, 5000));
+  Wait(GaussRangeInt(0, 5000));
 End;
 
 Function StatusMenu: Boolean;
@@ -342,13 +342,13 @@ Begin
   CTS := GetToleranceSpeed;
   SetColorToleranceSpeed(2);
 
-  SetToleranceSpeed2Modifiers(0.08,0.05);
+  SetToleranceSpeed2Modifiers(0.08,0.06);
   FindColorsSpiralTolerance(MainScreen.PlayerPoint.X,MainScreen.PlayerPoint.Y,TPA,7499110,MainScreen.GetBounds.X1,MainScreen.GetBounds.Y1,MainScreen.GetBounds.X2,MainScreen.GetBounds.Y2,18);
   SetColorToleranceSpeed(CTS);
   SetToleranceSpeed2Modifiers(0.2,0.2);
 
   ATPA := TPAtoATPAEx(TPA,10,25);
-  SortATPAFromFirstPointY(ATPA,Point(316,195));
+  SortATPAFromFirstPointY(ATPA,Point(325,200));
 
   If (Length(ATPA) = 0) Then
   Begin
@@ -382,9 +382,9 @@ Begin
       If Not IsLoggedIn Then
         Exit;
 
-   //   SetColorToleranceSpeed(2);
-     // SetToleranceSpeed2Modifiers(0.00,0.00);
-      FindColorsSpiralTolerance(MainScreen.PlayerPoint.X,MainScreen.PlayerPoint.Y,TPA2,988185,ChestBox.X1,ChestBox.Y1,ChestBox.X2,ChestBox.Y2,3);
+      SetColorToleranceSpeed(2);
+      SetToleranceSpeed2Modifiers(0.93,3.24);
+      FindColorsSpiralTolerance(MainScreen.PlayerPoint.X,MainScreen.PlayerPoint.Y,TPA2,922392,ChestBox.X1,ChestBox.Y1,ChestBox.X2,ChestBox.Y2,1);
       SetColorToleranceSpeed(CTS);
       SetToleranceSpeed2Modifiers(0.2,0.2);
 
@@ -430,7 +430,7 @@ Begin
 
     MBP := MiddleBox(TBA[H]);
 
-    Mouse(Point(MBP.X+GaussRangeInt(-10,10),MBP.Y+GaussRangeInt(-10,10)),Mouse_Move,Mouse_Human);
+    Mouse(Point(MBP.X+GaussRangeInt(-5,6),MBP.Y+GaussRangeInt(-10,10)),Mouse_Move,Mouse_Human);
 
     If (IsMouseOverText(['Open','pen','chest','ches','hest'],300)) Then
     Begin
@@ -586,7 +586,7 @@ Begin
     'clean':
     Begin
       TypeSend(ToStr(QuickKey),False);
-      Wait(GaussRangeInt(0, 1500));
+      Wait(GaussRangeInt(0, 500));
       MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break);
       If Debug Then
         Writeln('Waiting for HerbMenu');
@@ -632,7 +632,7 @@ Begin
       T.Start;
       Time:=GaussRangeInt(25000, 45000);
       Repeat
-        Wait(GaussRangeInt(1000, 2000));
+        Wait(GaussRangeInt(0, 2000));
         AntiBan;
         If (Not IsLoggedIn) Or (T.GetTime>Time) Then
           Exit;
@@ -640,7 +640,7 @@ Begin
 
       If Debug Then
         Writeln('StatusMenu is gone');
-      Wait(GaussRangeInt(0, 1500));
+      Wait(GaussRangeInt(0, 900));
       ItemCount := ItemCount + 28;
     End;
     'pots':
@@ -698,13 +698,13 @@ Begin
       T.Start;
       Time:=GaussRangeInt(25000, 45000);
       Repeat
-        Wait(GaussRangeInt(0, 1500));
+        Wait(GaussRangeInt(0, 900));
         AntiBan;
         If (Not IsLoggedIn) Or (T.GetTime>Time) Then
           Exit;
       Until Not StatusMenu;
 
-      Wait(GaussRangeInt(0, 1500));
+      Wait(GaussRangeInt(0, 800));
       ItemCount := ItemCount + 14;
     End;
     Else
@@ -719,7 +719,7 @@ End;
 Procedure Setup
 Begin
   ClearDebug;
-  //AutoUpdateMe;
+  AutoUpdateMe;
 
   SmartEnableDrawing := True;
   SetupSRL;
@@ -728,7 +728,7 @@ Begin
   If Not Players[CurrentPlayer].Login Then
     TerminateScript;
 
- // If Not Debug Then
+  If Not Debug Then
     DisableSRLDebug:=True;
   ClearDebug;
  // StartingExperience := GetXPBarTotal;
