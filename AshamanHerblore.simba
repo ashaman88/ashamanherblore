@@ -11,7 +11,7 @@ Program AshamanHerblore;
 
 Const
   {Break Settings}
-  TakeBreaks   = True;    // ***Do you want to take breaks?***
+  TakeBreaks   = False;    // ***Do you want to take breaks?***
   SwitchWorlds = False;   // ***Switch worlds after a break?***
   BreakIn      = 600;     // ***How long before we take a break? (minutes)***
   BreakFor     = 15;      // ***How long will we break for? (minutes)***
@@ -19,12 +19,11 @@ Const
   Bfr          = 7;       // ***Random minutes to add/subjtract from break duraction***
 
   {Method Settings}
-  CleanOrPots = 'Clean';  // ***'Clean': Grimy Herbs top right bank spot***
+  CleanOrPots = 'Pots';  // ***'Clean': Grimy Herbs top right bank spot***
                           // ***'Pots' : (Unf) Clean Herbs are top right bank spot, Water Vials 2nd from top right bank spot
                           //             (Finished) Non-edidable ingredient is top right spot***
 
   {Other Settings}
-  XPPerItem    = 4;       // ***XP functions broken, how much xp do you get per item (round)?***
   QuickKey     = 0;       // ***What is the key you've set the herbs to? Don't f this up! (only for clean method)***
 
 Procedure DeclarePlayers;
@@ -38,7 +37,7 @@ Begin
   // loginName := '';      {Remove the "//" from this line if you arent using player manager}
   // password := '';       {Remove the "//" from this line if you arent using player manager}
     IsActive := True;
-  //  World := 96;           {Remove the "//" from this line if you want to set a world to login to}
+    World := 0;           {Change this if you want to set a world to login to}
    // BankPin := ;         {Remove the "//" from this line if you arent using player manager and you have a pin}
   End;
   CurrentPlayer := 0;
@@ -52,13 +51,13 @@ End;
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 Var
-  ItemCount,XP,StartingExperience,Slot: Integer;
+  ItemCount,XP,StartingExperience,Slot,StartingXP: Integer;
   Timeout,CurrentBTime: TTimeMarker;
   W,X,Y,Z,RealBTime,BreakRounds,TotalBreaks: Integer;
   ItemsPH,XPH: Extended;
 
 Const
-  ScriptVersion = '1.2';
+  ScriptVersion = '1.3';
   Debug = False;
 
 {*******************************************************************************
@@ -74,8 +73,8 @@ Var
 Begin
   Writeln('Checking for script updates...');
   OnlineVersion := GetPage('http://ashamanherblore.googlecode.com/git/Version.txt');
-  Writeln(OnlineVersion);
-  Writeln(ScriptVersion)
+  Writeln('Online Version: '+ToStr(OnlineVersion));
+  Writeln('Local Version: '+ToStr(ScriptVersion));
   If (trim(OnlineVersion) > ScriptVersion) Then
   Begin
     WriteLn('Newer script version online!');
@@ -97,6 +96,41 @@ Begin
   End Else
     WriteLn('You have the latest version of the script!');
 End;
+
+function TRSChatBox.getXP: Integer;
+var
+  b: TBox;
+  s: String;
+  tpa : TPointArray;
+  atpa : T2DPointArray;
+  i,cts,p: Integer;
+begin
+  b := self.getBounds();
+  b.edit(+(b.x2-b.x1)-140, +10, -5, -94);
+
+  findColorsTolerance(tpa, 14013909, b, 4,colorSetting(2, 0.00, 0.00));
+
+  if length(tpa) < 2 then
+  begin
+    print('chatBox.getXP(): No XP found', TDebug.SUB);
+    Exit;
+  end;
+
+  atpa := tpa.cluster(5);
+
+  b:= atpa.getbounds;
+  b.edit(-2,-2,+2,+3);
+
+  s:=Replace(tesseractgettext(b.x1,b.y1,b.x2,b.y2, FILTER_SMALL_CHARS), ' ', '', [rfReplaceAll]);
+
+  P := Pos('x', S);
+  if P > 0 then
+    Result := StrToIntDef(ExtractFromStr(Copy(s, P, Length(S)), Numbers), 0)
+  else
+    Result := StrToIntDef(ExtractFromStr(S, Numbers), 0);
+
+  print('chatBox.getXP(): XP found: ' + tostr(result), TDebug.SUB);
+end;
 
 Procedure FindNormalRandoms;
 Begin
@@ -252,8 +286,7 @@ Begin
 
   TTB := (((W) + (Y) + BreakRounds)-GetTimeRunning);
 
-  ItemCount := ItemCount;
-  XP := (ItemCount * XPPerItem);
+  XP := (ChatBox.GetXP - StartingXP);
   XPH := Round(XP * (3600.0 / (GetTimeRunning / 1000.0)));
   ItemsPH := Round((ItemCount * (3600.0 / (GetTimeRunning / 1000.0))));
 
@@ -339,16 +372,12 @@ Begin
     MouseBox(TabBackpack.GetBounds,Mouse_Move);
   End;
 
-  CTS := GetToleranceSpeed;
-  SetColorToleranceSpeed(2);
+  findColorsTolerance(tpa, 7499110, Mainscreen.GetBounds, 18,colorSetting(2,0.08,0.06));
 
-  SetToleranceSpeed2Modifiers(0.08,0.06);
-  FindColorsSpiralTolerance(MainScreen.PlayerPoint.X,MainScreen.PlayerPoint.Y,TPA,7499110,MainScreen.GetBounds.X1,MainScreen.GetBounds.Y1,MainScreen.GetBounds.X2,MainScreen.GetBounds.Y2,18);
-  SetColorToleranceSpeed(CTS);
-  SetToleranceSpeed2Modifiers(0.2,0.2);
-
-  ATPA := TPAtoATPAEx(TPA,10,25);
-  SortATPAFromFirstPointY(ATPA,Point(325,200));
+  atpa := tpa.cluster(20);
+  atpa.sortFromFirstPoint(Point(330,200));
+  atpa.filterBetween(0, 10);
+  atpa.filterBetween(150, 10000);
 
   If (Length(ATPA) = 0) Then
   Begin
@@ -368,25 +397,17 @@ Begin
 
   For I:= 0 To H Do
   Begin
-    If (Length(ATPA[I]) < 10) Or (Length(ATPA[I]) > 150)  Then
-      Continue;
-
     If Debug Then
       Writeln('Silver Chest Length: '+ToStr(Length(atpa[i]))+' for I:= '+ToStr(I));
 
     ChestBox := GetTPABounds(ATPA[I]);
-    ChestBox := IntToBox(Max(ChestBox.X1-8,0),Max(ChestBox.Y1-5,0),Min(ChestBox.X2+5,Mainscreen.X2),Min(ChestBox.Y2+5,Mainscreen.Y2));
 
     With ChestBox Do
     Begin
       If Not IsLoggedIn Then
         Exit;
 
-      SetColorToleranceSpeed(2);
-      SetToleranceSpeed2Modifiers(0.93,3.24);
-      FindColorsSpiralTolerance(MainScreen.PlayerPoint.X,MainScreen.PlayerPoint.Y,TPA2,922392,ChestBox.X1,ChestBox.Y1,ChestBox.X2,ChestBox.Y2,1);
-      SetColorToleranceSpeed(CTS);
-      SetToleranceSpeed2Modifiers(0.2,0.2);
+      findColorsTolerance(tpa2, 987927, ChestBox, 1,colorSetting(2, 2.78,3.28));
 
       If Debug Then
         Writeln('Black Chest Length: '+ToStr(Length(TPA2))+' for I:= '+ToStr(I));
@@ -394,6 +415,7 @@ Begin
       If Length(TPA2) > 40 Then
       Begin
         SetArrayLength(TBA, Length(TBA)+1);
+        ChestBox := IntToBox(Max(ChestBox.X1,0),Max(ChestBox.Y1,0),Min(ChestBox.X2,Mainscreen.X2),Min(ChestBox.Y2,Mainscreen.Y2));
         TBA[High(TBA)] := ChestBox;
       End;
     End;
@@ -432,14 +454,14 @@ Begin
 
     Mouse(Point(MBP.X+GaussRangeInt(-5,6),MBP.Y+GaussRangeInt(-10,10)),Mouse_Move,Mouse_Human);
 
-    If (IsMouseOverText(['Open','pen','chest','ches','hest'],300)) Then
+    If (IsMouseOverText(['Use','pen','chest','ches','hest'],300)) Then
     Begin
       If Debug Then
         Writeln('Found chest, Clicking.');
 
       FastClick(Mouse_Right);
 
-      If ChooseOption.Select(['Open','chest'],RandomRange(700,900)) Then
+      If ChooseOption.Select(['Use','chest'],RandomRange(700,900)) Then
       Begin
         Time:=GaussRangeInt(3000,8000);
         T.Start;
@@ -481,26 +503,13 @@ Begin
     Wait(Random(100));
     If BankScreen.IsOpen Then
       Break;
-    If IsMouseOverText(['Bank','Use',' chest','chest']) Then
-    Begin
-      FastClick(Mouse_Left);
-      T2.Start;
-      Time2:=GaussRangeInt(8000, 12000);
-      Repeat
-        Wait(GaussRangeInt(0, 1500));
-        If T2.GetTime>Time Then
-          Break;
-      Until BankScreen.IsOpen Or PinScreen.IsOpen;
-      If PinScreen.IsOpen Then
-        PinScreen.Enter(Players[CurrentPlayer].BankPin);
-      If PinScreen.IsOpen Or BankScreen.IsOpen Then
-        Break;
-    End;
     If OpenBank Then
       Break;
     If (T.GetTime>Time) Or (Not IsLoggedIn) Then
       Exit;
   Until (BankScreen.IsOpen Or Pinscreen.IsOpen);
+
+  PinScreen.Enter(Players[CurrentPlayer].BankPin);
 
   If BankScreen.GetPackCount > 0 Then
     BankScreen.QuickDeposit(QUICK_DEPOSIT_INVENTORY);
@@ -554,8 +563,7 @@ Begin
     8..9: Slot:=12;
   End;
 
-  If LowerCase(CleanOrPots)='pots' Then
-    TabBackpack.MouseSlot(Slot, Mouse_Move) Else
+  If LowerCase(CleanOrPots)='clean' Then
     MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break);
 
   T.Reset;
@@ -564,7 +572,8 @@ Begin
     Wait(GaussRangeInt(0, 900));
     If (T.GetTime>8000) Then
     Begin
-      Writeln('Failed withdrawing, shutting down');
+      Writeln('Failed withdrawing, shutting down - took a screenshot, send pic to ashaman (in the logs folder)');
+      TakeScreenshot('HerbFail');
       Players[CurrentPlayer].Logout;
       TerminateScript;
     End;
@@ -573,6 +582,23 @@ Begin
   Until TabBackpack.IsFull;
   Result := True;
 End;
+
+function multiType(Key: String; chance, maxClicks: integer): boolean;
+var
+  clicks: integer;
+begin
+  result := true;
+
+  repeat
+    inc(clicks);
+    TypeSend(Key,False);
+
+    if (random(100) > chance) or (not result) then
+      break;
+
+    wait(50 + random(50));
+  until(clicks >= maxClicks);
+end;
 
 Function MakeItems: Boolean;
 Var
@@ -585,7 +611,7 @@ Begin
   Case LowerCase(CleanOrPots) Of
     'clean':
     Begin
-      TypeSend(ToStr(QuickKey),False);
+      MultiType(ToStr(QuickKey),50,3);
       Wait(GaussRangeInt(0, 500));
       MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break);
       If Debug Then
@@ -603,7 +629,9 @@ Begin
       If Debug Then
         Writeln('HerbMenu is here');
 
-      FastClick(Mouse_Left);
+      GetMousePos(X,Y);
+
+      MultiClick(Point(X,Y),50,2);
 
       If Debug Then
         Writeln('Waiting for StatusMenu');
@@ -731,7 +759,6 @@ Begin
   If Not Debug Then
     DisableSRLDebug:=True;
   ClearDebug;
- // StartingExperience := GetXPBarTotal;
 
   MainScreen.SetAngle(MS_ANGLE_HIGH);
   Minimap.SetAngle(MM_DIRECTION_EAST);
@@ -743,6 +770,10 @@ Begin
   X := (BreakFor * 60000);
   Y := RandomRange(-BIR * 60000, BIR * 60000);
   Z := RandomRange(-BFR * 60000, BFR * 60000);
+
+  conversationBox.continue(true, true);
+
+  StartingXP:=ChatBox.GetXP;
 End;
 
 Procedure Mainloop;
@@ -769,7 +800,8 @@ Begin
 
     If Timeout.GetTime>300000 Then
     Begin
-      Writeln('Nothing has happened for too long, shutting down!');
+      Writeln('Nothing has happened for too long, shutting down!- took a screenshot, send pic to ashaman (in the logs folder)');
+      TakeScreenshot('HerbFail');
       TerminateScript;
     End;
 
