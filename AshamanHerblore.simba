@@ -19,7 +19,8 @@ Const
   Bfr          = 7;       // ***Random minutes to add/subjtract from break duraction***
 
   {Method Settings}
-  CleanOrPots = 'Pots';  // ***'Clean': Grimy Herbs top right bank spot***
+  LeftClick   = True;     // ***Left click on chest? Small chance it could mess up, false for right click***
+  CleanOrPots = 'Clean';  // ***'Clean': Grimy Herbs top right bank spot***
                           // ***'Pots' : (Unf) Clean Herbs are top right bank spot, Water Vials 2nd from top right bank spot
                           //             (Finished) Non-edidable ingredient is top right spot***
 
@@ -37,7 +38,7 @@ Begin
   // loginName := '';      {Remove the "//" from this line if you arent using player manager}
   // password := '';       {Remove the "//" from this line if you arent using player manager}
     IsActive := True;
-    World := 0;           {Change this if you want to set a world to login to}
+    World := 0;            {Change this if you want to set a world to login to}
    // BankPin := ;         {Remove the "//" from this line if you arent using player manager and you have a pin}
   End;
   CurrentPlayer := 0;
@@ -52,13 +53,72 @@ End;
 
 Var
   ItemCount,XP,StartingExperience,Slot,StartingXP: Integer;
+  ItemType, TypeEdit: String;
+  GetItem: Boolean;
   Timeout,CurrentBTime: TTimeMarker;
-  W,X,Y,Z,RealBTime,BreakRounds,TotalBreaks: Integer;
+  W,X,Y,Z,RealBTime,BreakRounds,TotalBreaks,AntiB,MouseB: Integer;
   ItemsPH,XPH: Extended;
 
 Const
-  ScriptVersion = '1.3';
+  ScriptVersion = '1.4';
   Debug = False;
+
+(*
+TRSChatbox.getXP
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: pascal
+
+    function TRSChatbox.getXP(): integer;
+
+Returns the amount of xp per the xp tracker in the top right corner of chatbox.
+
+.. note::
+
+    - by Ashaman88
+    - Last Updated: 01 January 2013 by Ashaman88
+
+Example:
+
+.. code-block:: pascal
+
+    xp:= chatbox.getXP;
+    writeln('Starting with ' + toStr(xp) + ' XP.');
+*)
+function TRSChatBox.getXP(): integer;
+var
+  b: TBox;
+  s: String;
+  tpa : TPointArray;
+  atpa : T2DPointArray;
+  i,p: Integer;
+begin
+  b := self.getBounds();
+  b.edit(+(b.x2-b.x1)-140, +10, -5, -94);
+
+  findColorsTolerance(tpa, 14013909, b, 4,colorSetting(2, 0.00, 0.00));
+
+  if length(tpa) < 2 then
+  begin
+    print('chatBox.getXP(): No XP found', TDebug.SUB);
+    Exit;
+  end;
+
+  atpa := tpa.cluster(5);
+
+  b:= atpa.getbounds();
+  b.edit(-2,-2,+2,+3);
+
+  s:=Replace(tesseractgettext(b.x1,b.y1,b.x2,b.y2, FILTER_SMALL_CHARS), ' ', '', [rfReplaceAll]);
+
+  p := Pos('x', S);
+  if p > 0 then
+    Result := StrToIntDef(ExtractFromStr(Copy(s, p, Length(S)), Numbers), 0)
+  else
+    Result := StrToIntDef(ExtractFromStr(s, Numbers), 0);
+
+  print('chatBox.getXP(): XP found: ' + tostr(result), TDebug.SUB);
+end;
 
 {*******************************************************************************
 Function AutoupdateMe;
@@ -97,13 +157,35 @@ Begin
     WriteLn('You have the latest version of the script!');
 End;
 
-function TRSChatBox.getXP: Integer;
+(*
+TRSChatbox.getXP
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: pascal
+
+    function TRSChatbox.getXP(): integer;
+
+Initiates the chatbox variable.
+
+.. note::
+
+    - by Ashaman88
+    - Last Updated: 01 January 2013 by Ashaman88
+
+Example:
+
+.. code-block:: pascal
+
+    xp:= chatbox.getXP;
+    writeln('Starting with ' + toStr(xp) + ' XP.');
+*)
+{function TRSChatBox.getXP(): integer;
 var
   b: TBox;
   s: String;
   tpa : TPointArray;
   atpa : T2DPointArray;
-  i,cts,p: Integer;
+  i,p: Integer;
 begin
   b := self.getBounds();
   b.edit(+(b.x2-b.x1)-140, +10, -5, -94);
@@ -123,106 +205,19 @@ begin
 
   s:=Replace(tesseractgettext(b.x1,b.y1,b.x2,b.y2, FILTER_SMALL_CHARS), ' ', '', [rfReplaceAll]);
 
-  P := Pos('x', S);
-  if P > 0 then
-    Result := StrToIntDef(ExtractFromStr(Copy(s, P, Length(S)), Numbers), 0)
+  p := Pos('x', S);
+  if p > 0 then
+    Result := StrToIntDef(ExtractFromStr(Copy(s, p, Length(S)), Numbers), 0)
   else
-    Result := StrToIntDef(ExtractFromStr(S, Numbers), 0);
+    Result := StrToIntDef(ExtractFromStr(s, Numbers), 0);
 
   print('chatBox.getXP(): XP found: ' + tostr(result), TDebug.SUB);
-end;
+end;     }
 
 Procedure FindNormalRandoms;
 Begin
   ExitSquealOfFortune;
   ClaimSpinTicket;
-End;
-
-//by Home
-function AreaToBoxArray(const AreaX1, AreaY1, AreaX2, AreaY2, Width, Height: Integer): TBoxArray;
-var
-  AreaW, AreaH: Integer;
-  BoxX, BoxY: Integer;
-  x, y, i: Integer;
-begin
-  // Calculate the area dimensions
-  AreaW := AreaX2 - AreaX1 + 1;
-  AreaH := AreaY2 - AreaY1 + 1;
-
-  // Calculate the number of boxes in each dimension
-  BoxX := AreaW div Width;
-  if AreaW mod Width <> 0 then Inc(BoxX);
-  BoxY := AreaH div Height;
-  if AreaH mod Height <> 0 then Inc(BoxY);
-
-  // Set the number of boxes
-  SetLength(Result, BoxX * BoxY);
-
-  // Calculate the boxes
-  i := 0;
-  for y := 0 to BoxY - 1 do
-    for x := 0 to BoxX - 1 do
-    begin
-      Result[i] := IntToBox(AreaX1 + x * Width,
-        AreaY1 + y * Height,
-        Min(AreaX2, AreaX1 + (x + 1) * Width - 1),
-        Min(AreaY2, AreaY1 + (y + 1) * Height - 1));
-      Inc(i);
-    end;
-end;
-
-Procedure CheckMovingObjs(RClick: Boolean);
-var
-  TBA: TBoxArray;
-  MidBox: TPoint;
-  TIA: TIntegerArray;
-  H,I,J,X,Y,T: Integer;
-  TPA,PBox: TPointArray;
-begin
-  if not IsLoggedIn then Exit;
-
-  SetColorToleranceSpeed(1);
-  SetToleranceSpeed2Modifiers(0.2, 0.2);
-
-  PBox := TPAFromBox(MainScreen.PlayerBox);
-  TBA := AreaToBoxArray(Mainscreen.X1, Mainscreen.Y1, Mainscreen.X2, Mainscreen.Y2, 35, 35);
-  TIA := GetPixelShift(TBA, 300);
-
-  for H := 0 to High(TBA) do
-  begin
-    if (TIA[H] > 100) then
-    begin
-      MidBox := MiddleBox(TBA[H]);
-      SetArrayLength(TPA, Length(TPA)+1);
-      TPA[High(TPA)] := MidBox;
-    end;
-  end;
-
-  ClearTPAFromTPAWrap(TPA, PBox, TPA);
-  if (Length(TPA) < 1) then Exit;
-
-  I := Random(Length(TPA));
-  Mouse(Point(TPA[I].X+GaussRangeInt(-10,10), TPA[I].Y+GaussRangeInt(-10,10)),Mouse_Move,Mouse_Human);
-
-  if RClick then
-  begin
-    FastClick(Mouse_Right);
-    if (chooseOption.isOpen(500)) then
-      J := Length(ChooseOption.__getOptions());
-    Wait(GaussRangeInt(J*75, J*120));
-
-    ChooseOption.Close
-  end;
-  SetArrayLength(TPA,0);
-end;
-
-Function HerbMenu: Boolean;
-Begin
-  Result:= CountColorTolerance(697806,IntToBox(246,39,332,56),63) > 300
-  If Debug Then
-    If Result Then
-      Writeln('HerbMenu Present') Else
-      Writeln('HerbMenu Not Present');
 End;
 
 Function Antiban: Boolean;
@@ -231,52 +226,26 @@ Var
 Begin
   I := Random(600);
   Case I Of
-    1..3:
+    1: boredHuman(false);
+    2..7:
+      Begin
+        hoverSkill(Skill_Herblore);
+        Wait(GaussRangeInt(1000,2000));
+      End;
+    8..50: mouseMovingObject;
+    51..100: SleepAndMoveMouse(RandomRange(100,MouseB));
+    101..400:
       Begin
         MouseOffClient(Random(4));
-        Result := True;
+        Wait(RandomRange(2000, MouseB));
       End;
-    4..7:
-      Begin
-        TabStats.GetSkillLevel(Skill_Herblore,SKILL_DYNAMIC);
-        Wait(GaussRangeInt(1000,2000));
-        TabBackpack.Open;
-        Result := True;
-      End;
-    8..50:
-      Begin
-        CheckMovingObjs(False);
-        Result := True;
-      End;
-    51..200:
-      Begin
-        SleepAndMoveMouse(GaussRangeInt(400,500));
-        Result:=True;
-      End;
-    201..400:
-      Begin
-        MouseOffClient(4);
-        Result:=True;
-      End;
-    401..600:
-      Begin
-        Wait(RandomRange(250, 1500));
-        Result:=True;
-      End;
+    501..600: Wait(RandomRange(1000, 2000));
+
   End;
-  Wait(GaussRangeInt(0, 5000));
+  Wait(GaussRangeInt(0, AntiB));
 End;
 
-Function StatusMenu: Boolean;
-Var
-  CTS: Integer;
-Begin
-  Result:= CountColorTolerance(697806,IntToBox(244,77,333,96),63) > 300
-  If Debug Then
-    If Result Then
-      Writeln('StatusMenu Present') Else
-      Writeln('StatusMenu Not Present');
-End;
+
 
 Procedure ProgressReport;
 Var
@@ -293,10 +262,18 @@ Begin
   Writeln('========AshamanHerblore=========');
   Writeln('==========Version: '+ScriptVersion+'==========');
   Writeln('Time Running: ' + TimeRunning);
-  Writeln('Items Made: ' + IntToStr(ItemCount));
+
+  If LowerCase(CleanOrPots) = 'clean' Then
+    Writeln(ItemType + ' Cleaned: ' + IntToStr(ItemCount)) Else
+    Writeln(ItemType + ' Made: ' + IntToStr(ItemCount));
+
   Writeln('Experience Earned: ' + IntToStr(XP));
   Writeln('Experience/Hour: ' + ToStr(XPH));
-  Writeln('Items/H: ' + ToStr(ItemsPH));
+
+  If LowerCase(CleanOrPots) = 'clean' Then
+    Writeln(ItemType + ' Cleaned/H: ' + ToStr(ItemsPH)) Else
+    Writeln(ItemType + ' Made/H: ' + ToStr(ItemsPH));
+
   Writeln('================================');
 
   If TakeBreaks Then
@@ -330,7 +307,7 @@ Begin
       Timeout.Reset;
       Timeout.Start;
       Result := IsLoggedIn;
-      Minimap.ClickCompass;
+      Minimap.SetAngle(MM_DIRECTION_EAST);
       MainScreen.SetAngle(MS_ANGLE_HIGH);
       IncEx(BreakRounds, (W) + (X));
       Inc(TotalBreaks);
@@ -342,15 +319,14 @@ Begin
     End;
 End;
 
-Function OpenBank: Boolean;
+Function OpenBank(LClick: Boolean): Boolean;
 Var
-  X,Y,H,I,CTS,Time: Integer;
+  X,Y,H,I,Time: Integer;
   T: TTimeMarker;
   ChestBox: TBox;
-  TPA,TPA2: TPointArray;
-  ATPA,ATPA2: T2DPointArray;
+  TPA: TPointArray;
+  ATPA: T2DPointArray;
   TBA: TBoxArray;
-  MBP: TPoint;
 Begin
   Result := False;
 
@@ -359,11 +335,7 @@ Begin
 
   Result:= BankScreen.IsOpen Or PinScreen.IsOpen;
   If Result Then
-  Begin
-    SetLength(ATPA,0);
-    SetLength(TPA,0);
     Exit;
-  End;
 
   If (ChooseOption.OptionsExist(['Exam','mine','Examine','Canc','ncel','Cancel'],400)) Then
   Begin
@@ -372,12 +344,17 @@ Begin
     MouseBox(TabBackpack.GetBounds,Mouse_Move);
   End;
 
-  findColorsTolerance(tpa, 7499110, Mainscreen.GetBounds, 18,colorSetting(2,0.08,0.06));
+  ChestBox:=Mainscreen.playerBox;
+  ChestBox.Edit(-35,-35,+35,+35);
 
-  atpa := tpa.cluster(20);
-  atpa.sortFromFirstPoint(Point(330,200));
+  findColorsTolerance(tpa, 7433574, ChestBox, 18,colorSetting(2,0.10,0.07));    //silver
+
+  atpa := tpa.cluster(15,20);
   atpa.filterBetween(0, 10);
-  atpa.filterBetween(150, 10000);
+  atpa.filterBetween(200, 10000);
+  atpa.sortFromFirstPoint(Point(330,200));
+
+  SetLength(TPA,0);
 
   If (Length(ATPA) = 0) Then
   Begin
@@ -400,28 +377,30 @@ Begin
     If Debug Then
       Writeln('Silver Chest Length: '+ToStr(Length(atpa[i]))+' for I:= '+ToStr(I));
 
-    ChestBox := GetTPABounds(ATPA[I]);
+    ChestBox := ATPA[I].GetBounds;
+    ChestBox.Edit(-10,0,+10,0);
+    ChestBox.SetLimit(Mainscreen.GetBounds);
 
     With ChestBox Do
     Begin
       If Not IsLoggedIn Then
         Exit;
 
-      findColorsTolerance(tpa2, 987927, ChestBox, 1,colorSetting(2, 2.78,3.28));
+      findColorsTolerance(TPA, 987927, ChestBox, 1,colorSetting(2, 2.78,7.16));  //BLACKKKKK
 
       If Debug Then
-        Writeln('Black Chest Length: '+ToStr(Length(TPA2))+' for I:= '+ToStr(I));
+        Writeln('Black Chest Length: '+ToStr(Length(TPA))+' for I:= '+ToStr(I));
 
-      If Length(TPA2) > 40 Then
+      If Length(TPA) > 30 Then
       Begin
         SetArrayLength(TBA, Length(TBA)+1);
-        ChestBox := IntToBox(Max(ChestBox.X1,0),Max(ChestBox.Y1,0),Min(ChestBox.X2,Mainscreen.X2),Min(ChestBox.Y2,Mainscreen.Y2));
+        ChestBox.Edit(+12,+2,-10,-2);
         TBA[High(TBA)] := ChestBox;
       End;
+      SetLength(TPA,0);
     End;
   End;
 
-  If Debug Then
   Try
     SmartImage.Clear;
     SmartImage.DrawBoxes(TBA, False, clRed);
@@ -429,15 +408,10 @@ Begin
     Writeln('Failed Drawing Boxes.');
   End;
 
-  SetLength(TPA,0);
   SetLength(ATPA,0);
-  SetLength(TPA2,0);
-  SetLength(ATPA2,0);
 
-  For H := 0 To High(TBA) Do
+  For I := 0 To High(TBA) Do
   Begin
-    MBP := MiddleBox(TBA[H]);
-
     If (ChooseOption.OptionsExist(['Exam','mine','Examine','Canc','ncel','Cancel'],400)) Then
     Begin
       If Debug Then
@@ -450,50 +424,53 @@ Begin
     If Result Then
       Break;
 
-    MBP := MiddleBox(TBA[H]);
-
-    Mouse(Point(MBP.X+GaussRangeInt(-5,6),MBP.Y+GaussRangeInt(-10,10)),Mouse_Move,Mouse_Human);
+    MouseBox(TBA[I]);
 
     If (IsMouseOverText(['Use','pen','chest','ches','hest'],300)) Then
     Begin
       If Debug Then
         Writeln('Found chest, Clicking.');
 
-      FastClick(Mouse_Right);
+      SmartImage.Clear;
 
-      If ChooseOption.Select(['Use','chest'],RandomRange(700,900)) Then
-      Begin
-        Time:=GaussRangeInt(3000,8000);
-        T.Start;
-        Repeat
-          If Not IsLoggedIn Then
-            Exit;
-          If T.GetTime>Time Then
+      If LClick Then
+        FastClick(Mouse_Left) Else
+        Begin
+          FastClick(Mouse_Right);
+          If Not ChooseOption.Select(['Use','chest'],RandomRange(700,900)) Then
           Begin
-            If Debug Then
-              Writeln('Took too long to open chest');
-            SetLength(ATPA,0);
-            SetLength(TPA,0);
+            SetLength(TBA,0);
             Exit;
           End;
-          Wait(Random(100));
-        Until BankScreen.IsOpen Or PinScreen.IsOpen;
-        SetLength(ATPA,0);
-        SetLength(TPA,0);
-        Result:=True;
-        Exit;
-      End;
+        End;
+
+      Time:=GaussRangeInt(3000,8000);
+      T.Start;
+      Repeat
+        If Not IsLoggedIn Then
+          Exit;
+        If T.GetTime>Time Then
+        Begin
+          If Debug Then
+            Writeln('Took too long to open chest');
+          SetLength(TBA,0);
+          Exit;
+        End;
+        Wait(Random(100));
+      Until BankScreen.IsOpen Or PinScreen.IsOpen;
+      SetLength(TBA,0);
+      Result:=True;
+      Exit;
     End;
   End;
-  SetLength(ATPA,0);
-  SetLength(TPA,0);
+  SetLength(TBA,0);
 End;
 
 
 Function Banking: Boolean;
 Var
-  T,T2: TTimeMarker;
-  Time,Time2: Integer;
+  T: TTimeMarker;
+  Time: Integer;
 Begin
   If Not IsLoggedIn Then
     Exit;
@@ -501,10 +478,9 @@ Begin
   Time:=GaussRangeInt(15000, 24000);
   Repeat
     Wait(Random(100));
-    If BankScreen.IsOpen Then
-      Break;
-    If OpenBank Then
-      Break;
+    If OpenBank(LeftClick) Then
+      Break Else
+      Minimap.SetAngle(MM_DIRECTION_EAST);
     If (T.GetTime>Time) Or (Not IsLoggedIn) Then
       Exit;
   Until (BankScreen.IsOpen Or Pinscreen.IsOpen);
@@ -556,7 +532,7 @@ Begin
   End;
 
   BankScreen.Close;
-  Wait(GaussRangeInt(0, 900));
+  Wait(GaussRangeInt(0, 200));
 
   Case Random(10) Of
     0..7: Slot:=11;
@@ -564,12 +540,22 @@ Begin
   End;
 
   If LowerCase(CleanOrPots)='clean' Then
-    MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break);
+    MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break) Else
+    Begin
+      Case Random(10) Of
+          0..7: Slot:=11;
+          8..9: Slot:=12;
+        End;
+
+      TabBackpack.MouseSlot(Slot, Mouse_Move);
+    End;
 
   T.Reset;
   T.Start;
   Repeat
-    Wait(GaussRangeInt(0, 900));
+    If (TabBackpack.IsItemInSlot(28)) Then
+      Break;
+    Wait(GaussRangeInt(0, 500));
     If (T.GetTime>8000) Then
     Begin
       Writeln('Failed withdrawing, shutting down - took a screenshot, send pic to ashaman (in the logs folder)');
@@ -579,26 +565,9 @@ Begin
     End;
     If Not IsLoggedIn Then
       Exit;
-  Until TabBackpack.IsFull;
+  Until (TabBackpack.IsItemInSlot(28));
   Result := True;
 End;
-
-function multiType(Key: String; chance, maxClicks: integer): boolean;
-var
-  clicks: integer;
-begin
-  result := true;
-
-  repeat
-    inc(clicks);
-    TypeSend(Key,False);
-
-    if (random(100) > chance) or (not result) then
-      break;
-
-    wait(50 + random(50));
-  until(clicks >= maxClicks);
-end;
 
 Function MakeItems: Boolean;
 Var
@@ -611,39 +580,54 @@ Begin
   Case LowerCase(CleanOrPots) Of
     'clean':
     Begin
-      MultiType(ToStr(QuickKey),50,3);
+      AntiB:= RandomRange(0,500);
+      MouseB:= RandomRange(0,3000);
+
       Wait(GaussRangeInt(0, 500));
-      MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break);
+      SendKeys(ToStr(QuickKey), 60 + Random(60), 60 + Random(60));
+      Wait(GaussRangeInt(0, 100));
+      MouseBox([293,332,505,348]);
       If Debug Then
         Writeln('Waiting for HerbMenu');
       T.Start;
       Time:=GaussRangeInt(6000, 12000);
       Repeat
+        If Productionscreen.IsOpen Then
+          Break;
         Wait(GaussRangeInt(0, 500));
         If (Not IsLoggedIn) Or (T.GetTime>Time) Then
           Exit;
-      Until HerbMenu;
+      Until Productionscreen.IsOpen;
 
-      Wait(GaussRangeInt(0, 400));
+      Wait(GaussRangeInt(0, 200));
+
+      If GetItem Then
+      Begin
+        ItemType:= Productionscreen.getSelectedBoxText;
+        ItemType:= Copy(ItemType, 7, Length(ItemType));
+        TypeEdit:= ToStr(ItemType[1]);
+        ItemType:= Copy(ItemType, 2, Length(ItemType));
+        ItemType:= (Uppercase(TypeEdit)+ItemType);
+        ItemType:= Trim(ItemType);
+        GetItem:=False;
+      End;
 
       If Debug Then
         Writeln('HerbMenu is here');
 
-      GetMousePos(X,Y);
-
-      MultiClick(Point(X,Y),50,2);
+      Productionscreen.ClickStart;
 
       If Debug Then
         Writeln('Waiting for StatusMenu');
 
-      T.Reset;
-      T.Start;
-      Time:=GaussRangeInt(6000, 12000);
-      Repeat
-        Wait(GaussRangeInt(0, 1500));
-        If (Not IsLoggedIn) Or (T.GetTime>Time) Then
-          Exit;
-      Until StatusMenu;
+      SRL_Events[EVENT_ANTIBAN] := nil;
+      If Not TabBackpack.waitSlotPixelChange(3,GaussRangeInt(10000, 20000)) Then
+      Begin
+        SRL_Events[EVENT_ANTIBAN] := @Antiban;
+        Exit;
+      End;
+
+      SRL_Events[EVENT_ANTIBAN] := @Antiban;
 
       Wait(GaussRangeInt(0, 1500));
 
@@ -656,27 +640,22 @@ Begin
       If Debug Then
         Writeln('Waiting for StatusMenu to leave');
 
-      T.Reset;
-      T.Start;
-      Time:=GaussRangeInt(25000, 45000);
-      Repeat
-        Wait(GaussRangeInt(0, 2000));
-        AntiBan;
-        If (Not IsLoggedIn) Or (T.GetTime>Time) Then
-          Exit;
-      Until Not StatusMenu;
+      If Not TabBackpack.waitSlotPixelChange(28,GaussRangeInt(25000, 45000)) Then
+        Exit;
 
       If Debug Then
         Writeln('StatusMenu is gone');
-      Wait(GaussRangeInt(0, 900));
       ItemCount := ItemCount + 28;
     End;
     'pots':
     Begin
+      AntiB:= 3000;
+      MouseB:= 6000;
+
       GetMousePOS(X,Y);
       If Slot = 0 Then
         Slot:=1;
-      If Not PointInBox(Point(X,Y),TabBackpack.GetSlotBox(Slot)) Then
+      If Not PointInBox(Point(X,Y),TabBackpack.GetSlotBox(11)) And Not PointInBox(Point(X,Y),TabBackpack.GetSlotBox(12)) Then
       Begin
         Case Random(10) Of
           0..7: Slot:=11;
@@ -684,7 +663,7 @@ Begin
         End;
       End;
       TabBackpack.MouseSlot(Slot, Mouse_Left);
-      Wait(GaussRangeInt(0, 400));
+      Wait(GaussRangeInt(0, 100));
 
       Case Random(10) Of
         0..7: Slot:=16;
@@ -692,30 +671,33 @@ Begin
       End;
 
       TabBackpack.MouseSlot(Slot, Mouse_Left);
-      Wait(GaussRangeInt(0, 400));
+      Wait(GaussRangeInt(0, 200));
       MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break);
 
       T.Reset;
       T.Start;
       Time:=GaussRangeInt(6000, 12000);
       Repeat
+        If Productionscreen.IsOpen Then
+          Break;
         Wait(GaussRangeInt(0, 500));
         If (Not IsLoggedIn) Or (T.GetTime>Time) Then
           Exit;
-      Until HerbMenu;
+      Until Productionscreen.IsOpen;
 
       Wait(GaussRangeInt(0, 400));
 
-      FastClick(Mouse_Left);
+      If GetItem Then
+      Begin
+        ItemType:= Productionscreen.getSelectedBoxText;
+        GetItem:=False;
+      End;
 
-      T.Reset;
-      T.Start;
-      Time:=GaussRangeInt(6000, 12000);
-      Repeat
-        Wait(GaussRangeInt(0, 1500));
-        If (Not IsLoggedIn) Or (T.GetTime>Time) Then
-          Exit;
-      Until StatusMenu;
+      Productionscreen.ClickStart;
+
+
+      If Not TabBackpack.WaitForShift(RandomRange(2000,4000)) Then
+        Exit;
 
       Wait(GaussRangeInt(0, 1500));
 
@@ -730,9 +712,8 @@ Begin
         AntiBan;
         If (Not IsLoggedIn) Or (T.GetTime>Time) Then
           Exit;
-      Until Not StatusMenu;
+      Until Not (TabBackpack.IsItemInSlot(28));
 
-      Wait(GaussRangeInt(0, 800));
       ItemCount := ItemCount + 14;
     End;
     Else
@@ -750,11 +731,18 @@ Begin
   AutoUpdateMe;
 
   SmartEnableDrawing := True;
+  SRL_Events[EVENT_ANTIBAN] := @Antiban;
   SetupSRL;
 
   DeclarePlayers;
-  If Not Players[CurrentPlayer].Login Then
-    TerminateScript;
+  If Not IsLoggedIn Then
+  Begin
+    If Not Players[CurrentPlayer].Login Then
+      TerminateScript;
+
+    Writeln('Just loggedin, waiting a bit');
+    Wait(RandomRange(6000,10000));
+  End;
 
   If Not Debug Then
     DisableSRLDebug:=True;
@@ -765,15 +753,21 @@ Begin
   FindNormalRandoms;
 
   Timeout.Start;
+  GetItem:=True;
 
   W := (BreakIn * 60000);
   X := (BreakFor * 60000);
   Y := RandomRange(-BIR * 60000, BIR * 60000);
   Z := RandomRange(-BFR * 60000, BFR * 60000);
 
-  conversationBox.continue(true, true);
+  If conversationBox.continue(true, true) Then
+    Wait(RandomRange(3000,2000));
+
+  TabBackpack.Open;
 
   StartingXP:=ChatBox.GetXP;
+
+  FindNormalRandoms;
 End;
 
 Procedure Mainloop;
