@@ -20,7 +20,7 @@ Const
 
   {Method Settings}
   LeftClick   = True;     // ***Left click on chest? Small chance it could mess up, false for right click***
-  CleanOrPots = 'Clean';  // ***'Clean': Grimy Herbs top right bank spot***
+  CleanOrPots = 'Pots';  // ***'Clean': Grimy Herbs top right bank spot***
                           // ***'Pots' : (Unf) Clean Herbs are top right bank spot, Water Vials 2nd from top right bank spot
                           //             (Finished) Non-edidable ingredient is top right spot***
 
@@ -38,7 +38,7 @@ Begin
   // loginName := '';      {Remove the "//" from this line if you arent using player manager}
   // password := '';       {Remove the "//" from this line if you arent using player manager}
     IsActive := True;
-    World := 0;            {Change this if you want to set a world to login to}
+    World := 96;            {Change this if you want to set a world to login to}
    // BankPin := ;         {Remove the "//" from this line if you arent using player manager and you have a pin}
   End;
   CurrentPlayer := 0;
@@ -60,7 +60,7 @@ Var
   ItemsPH,XPH: Extended;
 
 Const
-  ScriptVersion = '1.4';
+  ScriptVersion = '1.5';
   Debug = False;
 
 (*
@@ -319,151 +319,106 @@ Begin
     End;
 End;
 
-Function OpenBank(LClick: Boolean): Boolean;
-Var
-  X,Y,H,I,Time: Integer;
-  T: TTimeMarker;
-  ChestBox: TBox;
-  TPA: TPointArray;
-  ATPA: T2DPointArray;
-  TBA: TBoxArray;
-Begin
-  Result := False;
+function OpenBank(LClick: Boolean): boolean;
+const
+  colBlue: TColorData = [8946555, 15, [2, 0.18, 0.18]];
+  colBrown: TColorData = [5863053, 10, [2, 0.13, 0.10]];
+var
+  tpaBlue, tpaBrown, blueEdges, brownEdges, goodEdge, tpa: TPointArray;
+  t: ttimemarker;
+  atpa, atpaFiltered: T2DPointArray;
+  i, j, hi, wid, hei, time: integer;
+begin
+  result := false;
 
-  If Not IsLoggedIn Then
-    Exit;
+  if (colBlue.gatherIn(tpaBlue, mainScreen.getBounds())) and (colBrown.gatherIn(tpaBrown, mainScreen.getBounds())) then
+  begin
+    blueEdges := findTPAEdges(tpaBlue);
+    brownEdges := findTPAEdges(tpaBrown);
+    hi := high(blueEdges);
 
-  Result:= BankScreen.IsOpen Or PinScreen.IsOpen;
-  If Result Then
-    Exit;
+    for i := 0 to hi do
+      if (nearbyPointInArrayEx(blueEdges[i], 1, 1, brownEdges)) then
+        insert(blueEdges[i], goodEdge);
 
-  If (ChooseOption.OptionsExist(['Exam','mine','Examine','Canc','ncel','Cancel'],400)) Then
-  Begin
-    If Debug Then
-      Writeln('Closing options menu');
-    MouseBox(TabBackpack.GetBounds,Mouse_Move);
-  End;
+    if (length(goodEdge) > 10) then
+    begin
+      atpa := clusterTPAEx(goodEdge, 2, 2);
 
-  ChestBox:=Mainscreen.playerBox;
-  ChestBox.Edit(-35,-35,+35,+35);
+      for i := 0 to high(atpa) do
+        if (length(atpa[i]) > 5) then
+        begin
+          getTPABounds(atpa[i]).getDimensions(wid, hei);
 
-  findColorsTolerance(tpa, 7433574, ChestBox, 18,colorSetting(2,0.10,0.07));    //silver
+          if (wid > 3) and (hei > 3) then
+            insert(atpa[i], atpaFiltered);
+        end;
 
-  atpa := tpa.cluster(15,20);
-  atpa.filterBetween(0, 10);
-  atpa.filterBetween(200, 10000);
-  atpa.sortFromFirstPoint(Point(330,200));
+      setLength(atpa, 0);
+      setLength(tpa, 0);
 
-  SetLength(TPA,0);
+      tpa := mergeATPA(atpaFiltered);
+      atpa := clusterTPAEx(tpa, 10, 10);
 
-  If (Length(ATPA) = 0) Then
-  Begin
-    If Debug Then
-      Writeln('No booth found.');
-    Exit;
-  End;
+      sortATPAFromSize(atpa, 100, true);
 
-  If Debug Then
-    Try
-      debugATPA(ATPA);
-    Except
-      Writeln('Box out of bounds');
-    End;
-
-  H := High(ATPA);
-
-  For I:= 0 To H Do
-  Begin
-    If Debug Then
-      Writeln('Silver Chest Length: '+ToStr(Length(atpa[i]))+' for I:= '+ToStr(I));
-
-    ChestBox := ATPA[I].GetBounds;
-    ChestBox.Edit(-10,0,+10,0);
-    ChestBox.SetLimit(Mainscreen.GetBounds);
-
-    With ChestBox Do
-    Begin
-      If Not IsLoggedIn Then
-        Exit;
-
-      findColorsTolerance(TPA, 987927, ChestBox, 1,colorSetting(2, 2.78,7.16));  //BLACKKKKK
-
-      If Debug Then
-        Writeln('Black Chest Length: '+ToStr(Length(TPA))+' for I:= '+ToStr(I));
-
-      If Length(TPA) > 30 Then
+      For I := 0 To High(ATPA) Do
       Begin
-        SetArrayLength(TBA, Length(TBA)+1);
-        ChestBox.Edit(+12,+2,-10,-2);
-        TBA[High(TBA)] := ChestBox;
-      End;
-      SetLength(TPA,0);
-    End;
-  End;
-
-  Try
-    SmartImage.Clear;
-    SmartImage.DrawBoxes(TBA, False, clRed);
-  Except
-    Writeln('Failed Drawing Boxes.');
-  End;
-
-  SetLength(ATPA,0);
-
-  For I := 0 To High(TBA) Do
-  Begin
-    If (ChooseOption.OptionsExist(['Exam','mine','Examine','Canc','ncel','Cancel'],400)) Then
-    Begin
-      If Debug Then
-        Writeln('Closing options menu');
-      MouseBox(TabBackpack.GetBounds,Mouse_Move);
-    End;
-
-
-    Result:= BankScreen.IsOpen Or PinScreen.IsOpen;
-    If Result Then
-      Break;
-
-    MouseBox(TBA[I]);
-
-    If (IsMouseOverText(['Use','pen','chest','ches','hest'],300)) Then
-    Begin
-      If Debug Then
-        Writeln('Found chest, Clicking.');
-
-      SmartImage.Clear;
-
-      If LClick Then
-        FastClick(Mouse_Left) Else
-        Begin
-          FastClick(Mouse_Right);
-          If Not ChooseOption.Select(['Use','chest'],RandomRange(700,900)) Then
-          Begin
-            SetLength(TBA,0);
-            Exit;
-          End;
-        End;
-
-      Time:=GaussRangeInt(3000,8000);
-      T.Start;
-      Repeat
-        If Not IsLoggedIn Then
-          Exit;
-        If T.GetTime>Time Then
+        smartImage.drawBox(getTPABounds(atpa[i]));
+        If (ChooseOption.OptionsExist(['Exam','mine','Examine','Canc','ncel','Cancel'],400)) Then
         Begin
           If Debug Then
-            Writeln('Took too long to open chest');
-          SetLength(TBA,0);
+            Writeln('Closing options menu');
+          MouseBox(TabBackpack.GetBounds,Mouse_Move);
+        End;
+
+
+        Result:= BankScreen.IsOpen Or PinScreen.IsOpen;
+        If Result Then
+          Break;
+
+        MouseBox(getTPABounds(atpa[0]));
+
+        If (IsMouseOverText(['Use','pen','chest','ches','hest'],300)) Then
+        Begin
+          If Debug Then
+            Writeln('Found chest, Clicking.');
+
+          SmartImage.Clear;
+
+          If LClick Then
+            FastClick(Mouse_Left) Else
+            Begin
+              FastClick(Mouse_Right);
+              If Not ChooseOption.Select(['Use','chest'],RandomRange(700,900)) Then
+              Begin
+                SetLength(ATPA,0);
+                Exit;
+              End;
+            End;
+
+          Time:=GaussRangeInt(3000,8000);
+          T.Start;
+          Repeat
+            If Not IsLoggedIn Then
+              Exit;
+            If T.GetTime>Time Then
+            Begin
+              If Debug Then
+                Writeln('Took too long to open chest');
+              SetLength(ATPA,0);
+              Exit;
+            End;
+            Wait(Random(100));
+          Until BankScreen.IsOpen Or PinScreen.IsOpen;
+          SetLength(ATPA,0);
+          Result:=True;
           Exit;
         End;
-        Wait(Random(100));
-      Until BankScreen.IsOpen Or PinScreen.IsOpen;
-      SetLength(TBA,0);
-      Result:=True;
-      Exit;
+      End;
+      SetLength(ATPA,0);
     End;
   End;
-  SetLength(TBA,0);
 End;
 
 
@@ -480,7 +435,10 @@ Begin
     Wait(Random(100));
     If OpenBank(LeftClick) Then
       Break Else
-      Minimap.SetAngle(MM_DIRECTION_EAST);
+      Begin
+        Minimap.SetAngle(MM_DIRECTION_EAST);
+        MainScreen.SetAngle(MS_ANGLE_HIGH);
+      End;
     If (T.GetTime>Time) Or (Not IsLoggedIn) Then
       Exit;
   Until (BankScreen.IsOpen Or Pinscreen.IsOpen);
