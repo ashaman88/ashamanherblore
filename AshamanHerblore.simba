@@ -71,7 +71,7 @@ Var
   ItemsPH,XPH: Extended;
 
 Const
-  ScriptVersion = '1.6';
+  ScriptVersion = '1.7';
   Debug = False;
 
 (*
@@ -351,6 +351,8 @@ Begin
     If (T.GetTime>Time) Or (Not IsLoggedIn) Then
       Exit;
   Until (BankScreen.IsOpen Or Pinscreen.IsOpen);
+
+  SRL_Events[EVENT_ANTIBAN] := @Antiban;
 
   PinScreen.Enter(Players[CurrentPlayer].BankPin);
 
