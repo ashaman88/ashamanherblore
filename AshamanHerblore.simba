@@ -99,7 +99,7 @@ procedure initPlayerForm();
 begin
   with playerForm do
   begin
-    name := 'AshamanSmither v'+toStr(ScriptVersion); // the title of the SPF, usually the name of your script
+    name := 'AshamanHerblore v'+toStr(ScriptVersion); // the title of the SPF, usually the name of your script
     scriptHelpThread := '';           // a link to a help thread, if set to '' will link to my setup guide
     scriptSettingsPath := '';         // where you want the settings file to be saved; saved in script's path by default
 
