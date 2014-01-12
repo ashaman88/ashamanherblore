@@ -1,78 +1,143 @@
+///////////////////////////////////////////////////////////////////////
+//                                                                   //
+//          READ THE DIRECTIONS IN THE OP FIRST OR ELSE              //
+//           Make sure you have setup your player file               //
+//                  Under SRL>PlayerManager                          //
+//                       Press Play                                  //
+//                                                                   //
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
 Program AshamanHerblore;
+
   {$DEFINE SMART}
   {$I SRL-6/SRL.Simba}
-
-///////////////////////////////////////////////////////////////////////
-//                                                                   //
-//                  Begin of user setup                              //
-//                Fill in the fields below                           //
-//                                                                   //
-///////////////////////////////////////////////////////////////////////
-
-Const
-  {Break Settings}
-  TakeBreaks   = False;    // ***Do you want to take breaks?***
-  SwitchWorlds = False;   // ***Switch worlds after a break?***
-  BreakIn      = 600;     // ***How long before we take a break? (minutes)***
-  BreakFor     = 15;      // ***How long will we break for? (minutes)***
-  Bir          = 13;      // ***Random minutes to add/subtract from how long until we break***
-  Bfr          = 7;       // ***Random minutes to add/subjtract from break duraction***
-
-  {Method Settings}
-  CleanOrPots = 'Pots';  // ***'Clean': Grimy Herbs top right bank spot***
-                          // ***'Pots' : (Unf) Clean Herbs are top right bank spot, Water Vials 2nd from top right bank spot
-                          //             (Finished) Non-edidable ingredient is top right spot***
-
-  {BankSettings}
-  Location     = BANK_NPC_BLUE;  //*** Fill out which bank you would like to use, see below for valid options***
-                          //  * BANK_NPC_BLUE
-                          //  * BANK_NPC_GREY
-                          //  * BANK_NPC_GREEN
-                          //  * BANK_BOOTH
-                          //  * BANK_CHEST_SW
-                          //  * BANK_CHEST_SHANTAY
-                          //  * BANK_CHEST_DUEL
-                          //  * BANK_CHEST_CW
-                          //  * BANK_CHEST_GROTTO
-                          //  * BANK_CHEST_BURTHORPE
-
-  {Other Settings}
-  QuickKey     = 0;       // ***What is the key you've set the herbs to? Don't f this up! (only for clean method)***
-
-Procedure DeclarePlayers;
-Begin
-  Players.Setup(['Player1'], 'PlayerList'); //***Fill this out, Player1 = Name of the account in player manager, PlayerList = name of the player file***
-  SetLength(Players,1);
-
-  //***If NOT using the player manager, fill out the loginname and password below, otherwise ignore those two***
-  With players[0] Do
-  Begin
-  // loginName := '';      {Remove the "//" from this line if you arent using player manager}
-  // password := '';       {Remove the "//" from this line if you arent using player manager}
-    IsActive := True;
-    World := 0;            {Change this if you want to set a world to login to}
-   // BankPin := ;         {Remove the "//" from this line if you arent using player manager and you have a pin}
-  End;
-  CurrentPlayer := 0;
-End;
-
-///////////////////////////////////////////////////////////////////////////////////////////
-//                                                                                       //
-//                            End of user setup                                          //
-//           Don't touch below this line unless you know what you're doing!!             //
-//                                                                                       //
-///////////////////////////////////////////////////////////////////////////////////////////
+  {$i srl-6/lib/misc/srlplayerform.simba}
 
 Var
-  ItemCount,XP,StartingExperience,Slot,StartingXP: Integer;
+  ItemCount,XP,StartingExperience,Slot,StartingXP,ItemsPH,XPH,Bir,Bfr: Integer;
   ItemType, TypeEdit: String;
   Timeout,CurrentBTime: TTimeMarker;
   W,X,Y,Z,RealBTime,BreakRounds,TotalBreaks,AntiB,MouseB: Integer;
-  ItemsPH,XPH: Extended;
 
 Const
-  ScriptVersion = '1.7';
+  ScriptVersion = '1.8';
   Debug = False;
+
+procedure declarePlayers();
+var
+  i,j: integer;
+begin
+  players.setup(playerForm.playerNames, playerForm.playerFile); // load the SPF players from the SRL Player Manager
+  currentPlayer := 0;                                           // player to use first
+
+  // set player attributes based on the settings from the form
+  for i := 0 to high(players) do
+    with players[i] do
+    begin
+      // convert the integers
+      integers[0] := strToInt(playerForm.players[i].settings[1]);  //minutes until break
+      integers[1] := strToInt(playerForm.players[i].settings[2]);  //minutes to break
+
+      for j := 0 to high(playerForm.comboBoxItems[1]) do
+        if (playerForm.players[i].settings[8] = playerForm.comboBoxItems[1][j]) then
+          integers[2] := j;                                                       //bankinglocation
+
+      World :=  strToInt(playerForm.players[i].settings[3]);                    //world
+
+
+      // booleans
+      booleans[0] := strToBool(playerForm.players[i].settings[4]);
+      booleans[1] := strToBool(playerForm.players[i].settings[5]);
+      FindMod := strToBool(playerForm.players[i].settings[6]);
+
+      // any other data types you've decided to use
+      strings[0] := playerForm.players[i].settings[0]; //quickkey
+      strings[1] := playerForm.players[i].settings[7]; //cleanorpots
+    end;
+end;
+
+// initiates the SRL player form (you aren't restricted to the procedure name; it can be whatever you want)
+procedure initPlayerForm();
+begin
+  with playerForm do
+  begin
+    name := 'AshamanSmither v'+toStr(ScriptVersion); // the title of the SPF, usually the name of your script
+    scriptHelpThread := '';           // a link to a help thread, if set to '' will link to my setup guide
+    scriptSettingsPath := '';         // where you want the settings file to be saved; saved in script's path by default
+
+    editBoxLabels := ['QuickKey', 'Minutes until Break', '# of Minutes to Break', 'World']; // edit boxes are created for each array element
+    editBoxDefaults := [ '0', '600', '15','0'];                                             // optional default values for each edit box; array length must equal editBoxLabel length
+    checkBoxLabels := ['Take Breaks', 'Switch Worlds (After Break)', 'Logout if Mod is near'];        // same as editBoxLabels but for check boxes
+    checkBoxDefaults := ['True','True','True'];
+
+    comboBoxLabels := ['CleanOrPots','Location'];                                                // same as editBoxLabels but for combo boxes (drop down boxes)
+    comboBoxDefaults := ['Clean','BANK_NPC_BLUE'];
+
+    // this needs to be done for every element in the comboBoxLabels array
+    setLength(comboBoxItems, length(comboBoxLabels));
+    comboBoxItems[0] := ['Clean', 'Pots'];       // all the options available for the first combo box
+    comboBoxItems[1] := ['BANK_NPC_BLUE', 'BANK_NPC_GREY', 'BANK_NPC_GREEN', 'BANK_BOOTH', 'BANK_CHEST_SW', 'BANK_CHEST_SHANTAY', 'BANK_CHEST_DUEL', 'BANK_CHEST_CW', 'BANK_CHEST_GROTTO', 'BANK_CHEST_BURTHORPE'];       // all the options available for the first combo box
+  end;
+end;
+
+procedure debugSPFSettings();
+var
+  i: integer;
+begin
+  writeln('');
+  writeln('Player file: ', playerForm.playerFile);
+
+  for i := 0 to high(players) do
+  begin
+    writeln('QuickKey:          ', players[i].strings[0]);
+    writeln('Minutes until Break:            ', players[i].integers[0]);
+    writeln('# of Minutes to Break: ', players[i].integers[1]);
+    writeln('Take Breaks:        ', players[i].booleans[0]);
+    writeln('Switch Worlds (After Break):        ', players[i].booleans[1]);
+    writeln('Logout if Mod is near:        ', players[i].findmod);
+    writeln('CleanOrPots:        ', players[i].strings[1]);
+    writeln('Location:        ', players[i].integers[2]);
+    writeln('');
+  end;
+end;
 
 (*
 TRSChatbox.getXP
@@ -261,6 +326,7 @@ End;
 Procedure ProgressReport;
 Var
   TTB: Integer;
+  Method: String;
 Begin
   ClearDebug;
 
@@ -270,24 +336,21 @@ Begin
   XPH := Round(XP * (3600.0 / (GetTimeRunning / 1000.0)));
   ItemsPH := Round((ItemCount * (3600.0 / (GetTimeRunning / 1000.0))));
 
-  Writeln('========AshamanHerblore=========');
-  Writeln('==========Version: '+ScriptVersion+'==========');
-  Writeln('Time Running: ' + TimeRunning);
+  Case Lowercase(Players[CurrentPlayer].Strings[1]) Of
+    'clean': Method:= 'Cleaned';
+    'pots':  Method:= 'Made';
+  End;
 
-  If LowerCase(CleanOrPots) = 'clean' Then
-    Writeln(ItemType + ' Cleaned: ' + IntToStr(ItemCount)) Else
-    Writeln(ItemType + ' Made: ' + IntToStr(ItemCount));
+  writeln('|=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=|');
+  writeln('|                  AshamanHerblore v'+PadR(toStr(ScriptVersion), 24), '|');
+  writeln('|=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=|');
+  writeln(PadR('| Running For: '+TimeRunning, 60)+'|');
+  writeln(PadR('| '+ItemType+'''s '+Method+': ' + GroupDigits(ItemCount,','), 40) + padR(Method+'/H: ' + GroupDigits(ItemsPH,','), 20) + '|');
+  writeln(PadR('| Exp Earned: ' + GroupDigits(XP,','), 40) + padR('Exp/Hour: ' + GroupDigits(XPH,','), 20) + '|');
+  writeln('|___________________________________________________________|');
+  writeln('|___________________________________________________________|');
 
-  Writeln('Experience Earned: ' + IntToStr(XP));
-  Writeln('Experience/Hour: ' + ToStr(XPH));
-
-  If LowerCase(CleanOrPots) = 'clean' Then
-    Writeln(ItemType + ' Cleaned/H: ' + ToStr(ItemsPH)) Else
-    Writeln(ItemType + ' Made/H: ' + ToStr(ItemsPH));
-
-  Writeln('================================');
-
-  If TakeBreaks Then
+  If Players[CurrentPlayer].Booleans[0] Then
     Writeln('Time until break: '+MsToTime(TTB, Time_Bare));
 End;
 
@@ -313,6 +376,8 @@ Begin
         Writeln('Breaktime left: '+IntToStr(H)+':'+IntToStr(M)+':'+IntToStr(S));
       Until(CurrentBTime.GetTime>(X+Z));
       Writeln('Logging in.');
+      If Players[CurrentPlayer].booleans[1] Then
+        Players[CurrentPlayer].World := 0;
       Players[CurrentPlayer].Login;
       Wait(4000);
       Timeout.Reset;
@@ -342,7 +407,7 @@ Begin
   Time:=GaussRangeInt(15000, 24000);
   Repeat
     Wait(Random(100));
-    If Bankscreen.Open(LOCATION) Then
+    If Bankscreen.Open(Players[CurrentPlayer].Integers[2]) Then
       Break Else
       Begin
         Minimap.SetAngle(MM_DIRECTION_NORTH);
@@ -359,7 +424,7 @@ Begin
   If BankScreen.GetPackCount > 0 Then
     BankScreen.QuickDeposit(QUICK_DEPOSIT_INVENTORY);
 
-  Case LowerCase(CleanOrPots) Of
+  Case Lowercase(Players[CurrentPlayer].Strings[1]) Of
     'clean':
     Begin
       T.Reset;
@@ -408,7 +473,7 @@ Begin
     8..9: Slot:=12;
   End;
 
-  If LowerCase(CleanOrPots)='clean' Then
+  If Lowercase(Players[CurrentPlayer].Strings[1])='clean' Then
     MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break) Else
     Begin
       Case Random(10) Of
@@ -428,7 +493,7 @@ Begin
     If (T.GetTime>8000) Then
     Begin
       Writeln('Failed withdrawing, shutting down - took a screenshot, send pic to ashaman (in the logs folder)');
-      TakeScreenshot('HerbFail');
+      TakeScreenshot('HerbFail.png');
       Players[CurrentPlayer].Logout;
       TerminateScript;
     End;
@@ -446,14 +511,14 @@ Begin
   If Not IsLoggedIn Then
     Exit;
   TabBackpack.Open;
-  Case LowerCase(CleanOrPots) Of
+  Case Lowercase(Players[CurrentPlayer].Strings[1]) Of
     'clean':
     Begin
       AntiB:= RandomRange(0,500);
       MouseB:= RandomRange(0,3000);
 
       Wait(GaussRangeInt(0, 500));
-      SendKeys(ToStr(QuickKey), 60 + Random(60), 60 + Random(60));
+      SendKeys(Players[CurrentPlayer].Strings[0], 60 + Random(60), 60 + Random(60));
       Wait(GaussRangeInt(0, 100));
       MouseBox([293,332,505,348]);
       If Debug Then
@@ -596,11 +661,19 @@ Begin
   ClearDebug;
   AutoUpdateMe;
 
+  initPlayerForm(); // initiate your settings
+  runPlayerForm();  // run the form
+
+  // use this so the script doesn't continue if the user exits out of the form
+  if (not playerForm.isScriptReady) then
+    terminatescript;
+
+  declarePlayers();
+
   SmartEnableDrawing := True;
   SRL_Events[EVENT_ANTIBAN] := @Antiban;
   SetupSRL;
 
-  DeclarePlayers;
   If Not IsLoggedIn Then
   Begin
     If Not Players[CurrentPlayer].Login Then
@@ -619,8 +692,11 @@ Begin
 
   Timeout.Start;
 
-  W := (BreakIn * 60000);
-  X := (BreakFor * 60000);
+  Bir:= 13;      // ***Random minutes to add/subtract from how long until we break***
+  Bfr:= 7;       // ***Random minutes to add/subjtract from break duraction***
+
+  W := (Players[CurrentPlayer].Integers[0] * 60000);
+  X := (Players[CurrentPlayer].Integers[1] * 60000);
   Y := RandomRange(-BIR * 60000, BIR * 60000);
   Z := RandomRange(-BFR * 60000, BFR * 60000);
 
@@ -663,8 +739,8 @@ Begin
       TerminateScript;
     End;
 
-    If TakeBreaks Then
-      BreakHandler(BreakIn,BreakFor,Bir,Bfr);
+    If Players[CurrentPlayer].Booleans[0] Then
+      BreakHandler(Players[CurrentPlayer].Integers[0],Players[CurrentPlayer].Integers[1],Bir,Bfr);
 End;
 
 Begin
