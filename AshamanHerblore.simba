@@ -58,7 +58,7 @@ Var
   W,X,Y,Z,RealBTime,BreakRounds,TotalBreaks,AntiB,MouseB: Integer;
 
 Const
-  ScriptVersion = '1.9';
+  ScriptVersion = '2.0';
   Debug = False;
 
 procedure declarePlayers();
@@ -82,7 +82,7 @@ begin
 
       Stacks := strToInt(playerForm.players[i].settings[4]);  //number of stacks
       World :=  strToInt(playerForm.players[i].settings[3]);                    //world
-
+      ismember:=true;
 
       // booleans
       booleans[0] := strToBool(playerForm.players[i].settings[5]);
@@ -92,7 +92,6 @@ begin
       // any other data types you've decided to use
       strings[0] := playerForm.players[i].settings[0]; //quickkey
       strings[1] := playerForm.players[i].settings[8]; //cleanorpots
-      strings[2] := playerForm.players[i].settings[10]; //graphics
     end;
 end;
 
@@ -110,14 +109,13 @@ begin
     checkBoxLabels := ['Take Breaks', 'Switch Worlds (After Break)', 'Logout if Mod is near'];        // same as editBoxLabels but for check boxes
     checkBoxDefaults := ['True','True','True'];
 
-    comboBoxLabels := ['CleanOrPots','Location', 'GraphicsMode'];                                                // same as editBoxLabels but for combo boxes (drop down boxes)
-    comboBoxDefaults := ['Clean','BANK_NPC_BLUE', 'OpenGL'];
+    comboBoxLabels := ['CleanOrPots','Location'];                                                // same as editBoxLabels but for combo boxes (drop down boxes)
+    comboBoxDefaults := ['Clean','BANK_NPC_BLUE'];
 
     // this needs to be done for every element in the comboBoxLabels array
     setLength(comboBoxItems, length(comboBoxLabels));
     comboBoxItems[0] := ['Clean', 'Pots'];       // all the options available for the first combo box
-    comboBoxItems[1] := ['BANK_NPC_BLUE', 'BANK_NPC_GREY', 'BANK_NPC_GREEN', 'BANK_BOOTH', 'BANK_CHEST_SW', 'BANK_CHEST_SHANTAY', 'BANK_CHEST_DUEL', 'BANK_CHEST_CW', 'BANK_CHEST_GROTTO', 'BANK_CHEST_BURTHORPE'];       // all the options available for the first combo box
-    comboBoxItems[2] := ['OpenGL', 'DirectX'];
+    comboBoxItems[1] := ['BANK_NPC_BLUE', 'BANK_NPC_GREY', 'BANK_NPC_GREEN', 'BANK_NPC_DRAYNOR', 'BANK_BOOTH', 'BANK_CHEST_SW', 'BANK_CHEST_SHANTAY', 'BANK_CHEST_DUEL', 'BANK_CHEST_CW', 'BANK_CHEST_GROTTO', 'BANK_CHEST_BURTHORPE'];       // all the options available for the first combo box
   end;
 end;
 
@@ -667,6 +665,7 @@ End;
 Procedure Setup
 Begin
   ClearDebug;
+  disableSRLLog:=true;
   AutoUpdateMe;
 
   initPlayerForm(); // initiate your settings
@@ -680,8 +679,7 @@ Begin
 
   SmartEnableDrawing := True;
   SRL_Events[EVENT_ANTIBAN] := @Antiban;
-  If Players[CurrentPlayer].strings[2] = 'DirectX' Then
-    smartPlugins := ['OpenGL32.dll','d3d9.dll'];
+  smartPlugins := ['OpenGL32.dll','d3d9.dll'];
   SetupSRL;
 
   If Not IsLoggedIn Then
