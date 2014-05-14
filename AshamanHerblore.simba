@@ -56,10 +56,10 @@ Var
   ItemType, TypeEdit: String;
   Timeout,CurrentBTime: TTimeMarker;
   W,X,Y,Z,RealBTime,BreakRounds,TotalBreaks,AntiB,MouseB: Integer;
+  debug, normalBank: Boolean;
 
 Const
-  ScriptVersion = '2.0';
-  Debug = False;
+  ScriptVersion = '2.1';
 
 procedure declarePlayers();
 var
@@ -77,21 +77,30 @@ begin
       integers[1] := strToInt(playerForm.players[i].settings[2]);  //minutes to break
 
       for j := 0 to high(playerForm.comboBoxItems[1]) do
-        if (playerForm.players[i].settings[9] = playerForm.comboBoxItems[1][j]) then
+        if (playerForm.players[i].settings[10] = playerForm.comboBoxItems[1][j]) then
           integers[2] := j;                                                  //bankinglocation
 
       Stacks := strToInt(playerForm.players[i].settings[4]);  //number of stacks
       World :=  strToInt(playerForm.players[i].settings[3]);                    //world
       ismember:=true;
 
+      if (playerForm.players[i].settings[11] = 'Normal') then
+        normalBank := true;
+
+      if not normalBank then
+        for j := 0 to high(playerForm.comboBoxItems[2]) do                            //quickload
+          if (playerForm.players[i].settings[11] = playerForm.comboBoxItems[2][j]) then
+            integers[4] := j+2;
+
       // booleans
       booleans[0] := strToBool(playerForm.players[i].settings[5]);
       booleans[1] := strToBool(playerForm.players[i].settings[6]);
       FindMod := strToBool(playerForm.players[i].settings[7]);
+      debug := strToBool(playerForm.players[i].settings[8]);
 
       // any other data types you've decided to use
       strings[0] := playerForm.players[i].settings[0]; //quickkey
-      strings[1] := playerForm.players[i].settings[8]; //cleanorpots
+      strings[1] := playerForm.players[i].settings[9]; //cleanorpots
     end;
 end;
 
@@ -106,16 +115,17 @@ begin
 
     editBoxLabels := ['QuickKey', 'Minutes until Break', '# of Minutes to Break', 'World','#ofStacks']; // edit boxes are created for each array element
     editBoxDefaults := [ '0', '600', '15','0', '1'];                                             // optional default values for each edit box; array length must equal editBoxLabel length
-    checkBoxLabels := ['Take Breaks', 'Switch Worlds (After Break)', 'Logout if Mod is near'];        // same as editBoxLabels but for check boxes
-    checkBoxDefaults := ['True','True','True'];
+    checkBoxLabels := ['Take Breaks', 'Switch Worlds (After Break)', 'Logout if Mod is near', 'Debug'];        // same as editBoxLabels but for check boxes
+    checkBoxDefaults := ['True','True','True', 'False'];
 
-    comboBoxLabels := ['CleanOrPots','Location'];                                                // same as editBoxLabels but for combo boxes (drop down boxes)
-    comboBoxDefaults := ['Clean','BANK_NPC_BLUE'];
+    comboBoxLabels := ['CleanOrPots','Location','QuickLoad'];                                                // same as editBoxLabels but for combo boxes (drop down boxes)
+    comboBoxDefaults := ['Clean','BANK_NPC_BLUE','Normal'];
 
     // this needs to be done for every element in the comboBoxLabels array
     setLength(comboBoxItems, length(comboBoxLabels));
     comboBoxItems[0] := ['Clean', 'Pots'];       // all the options available for the first combo box
-    comboBoxItems[1] := ['BANK_NPC_BLUE', 'BANK_NPC_GREY', 'BANK_NPC_GREEN', 'BANK_NPC_DRAYNOR', 'BANK_BOOTH', 'BANK_CHEST_SW', 'BANK_CHEST_SHANTAY', 'BANK_CHEST_DUEL', 'BANK_CHEST_CW', 'BANK_CHEST_GROTTO', 'BANK_CHEST_BURTHORPE'];       // all the options available for the first combo box
+    comboBoxItems[1] := ['BANK_NPC_BLUE', 'BANK_NPC_GREY', 'BANK_NPC_GREEN', 'BANK_NPC_DRAYNOR', 'BANK_NPC_ROGUES_DEN', 'BANK_BOOTH', 'BANK_CHEST_SW', 'BANK_CHEST_SHANTAY', 'BANK_CHEST_DUEL', 'BANK_CHEST_CW', 'BANK_CHEST_GROTTO', 'BANK_CHEST_BURTHORPE'];       // all the options available for the first combo box
+    comboBoxItems[2] := ['Normal', 'PRESET_1', 'PRESET_2'];
   end;
 end;
 
@@ -422,18 +432,23 @@ Begin
 
   PinScreen.Enter(Players[CurrentPlayer].BankPin);
 
-  If BankScreen.GetPackCount > 0 Then
-    BankScreen.QuickDeposit(QUICK_DEPOSIT_INVENTORY);
+  if normalBank then
+    If BankScreen.GetPackCount > 0 Then
+      BankScreen.QuickDeposit(QUICK_DEPOSIT_INVENTORY);
 
   Case Lowercase(Players[CurrentPlayer].Strings[1]) Of
     'clean':
     Begin
-      T.Reset;
       T.Start;
       Time:=GaussRangeInt(8000, 12000);
       Repeat
-        If BankScreen.Withdraw(10, WITHDRAW_AMOUNT_ALL, ['']) Then
-          Break;
+        if normalBank then
+        begin
+          if bankScreen.withdraw(10, WITHDRAW_AMOUNT_ALL, ['']) then
+            break;
+        end else
+          If bankScreen.clickButton(Players[CurrentPlayer].Integers[4]) Then
+            Break;
         If (T.GetTime>Time) Or (Not IsLoggedIn) Then
           Exit;
         Wait(GaussRangeInt(0, 1500));
@@ -442,55 +457,74 @@ Begin
 
     'pots':
     Begin
-      T.Reset;
       T.Start;
       Time:=GaussRangeInt(8000, 12000);
       Repeat
-        If BankScreen.Withdraw(10, 14, ['']) Then
-          Break;
+        if normalBank then
+        begin
+          If BankScreen.Withdraw(10, 14, ['']) Then
+            Break;
+        end else
+          If bankScreen.clickButton(Players[CurrentPlayer].Integers[4]) Then
+            Break;
         If (T.GetTime>Time) Or (Not IsLoggedIn) Then
           Exit;
         Wait(GaussRangeInt(0, 1500));
       Until False;
 
-      T.Reset;
-      T.Start;
-      Time:=GaussRangeInt(8000, 12000);
-      Repeat
-        If BankScreen.Withdraw(9, 14, ['']) Then
-          Break;
-        If (T.GetTime>Time) Or (Not IsLoggedIn) Then
-          Exit;
-        Wait(GaussRangeInt(0, 1500));
-      Until False;
+      if normalBank then
+      begin
+        T.Start;
+        Time:=GaussRangeInt(8000, 12000);
+        Repeat
+          If BankScreen.Withdraw(9, 14, ['']) Then
+            Break;
+          If (T.GetTime>Time) Or (Not IsLoggedIn) Then
+            Exit;
+          Wait(GaussRangeInt(0, 1500));
+        Until False;
+      end;
     End;
   End;
 
-  BankScreen.Close;
-  Wait(GaussRangeInt(0, 200));
+  if normalBank then
+    BankScreen.Close else
+  begin
+    t.start;
+    Time:=GaussRangeInt(4000, 8000);
+
+    Repeat
+      if not bankScreen.__find() then
+        Break;
+      If (T.GetTime>Time) Or (Not IsLoggedIn) Then
+        Exit;
+      Wait(GaussRangeInt(0, 200));
+    Until False;
+  end;
+
 
   Case Random(10) Of
     0..7: Slot:=11;
     8..9: Slot:=12;
   End;
 
-  If Lowercase(Players[CurrentPlayer].Strings[1])='clean' Then
-    MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break) Else
-    Begin
-      Case Random(10) Of
-          0..7: Slot:=11;
-          8..9: Slot:=12;
-        End;
+  If Lowercase(Players[CurrentPlayer].Strings[1])='pots' Then
+  Begin
+    Case Random(10) Of
+        0..7: Slot:=11;
+        8..9: Slot:=12;
+      End;
 
-      TabBackpack.MouseSlot(Slot, Mouse_Move);
-    End;
+    TabBackpack.MouseSlot(Slot, Mouse_Move);
+  End;
 
-  T.Reset;
+  Wait(GaussRangeInt(0, 100));
+
   T.Start;
   Repeat
     If (TabBackpack.IsItemInSlot(28)) Then
       Break;
-    Wait(GaussRangeInt(0, 500));
+    Wait(GaussRangeInt(0, 100));
     If (T.GetTime>8000) Then
     Begin
       If (Stacks>1) And (StackCheck<Stacks) Then
@@ -499,19 +533,30 @@ Begin
         Exit;
       End;
       Writeln('Failed withdrawing, shutting down - took a screenshot, send pic to ashaman (in the logs folder)');
-      TakeScreenshot('HerbFail.png');
+      SaveScreenshot(ScriptPath + timeRunning() + '_' + 'HerbFail.png');
       Players[CurrentPlayer].Logout;
       TerminateScript;
     End;
     If Not IsLoggedIn Then
       Exit;
   Until (TabBackpack.IsItemInSlot(28));
+
+
+  if chatbox.findTextOnLines(['could not be'], [0]) then
+    if countColorTolerance(66033, chatbox.lineBoxes[0], 10) > 100 then
+    begin
+      writeln('Failed withdrawing, shutting down - took a screenshot, send pic to ashaman (in the scripts folder)');
+      saveScreenshot(scriptPath + timeRunning() + '_' + 'HerbFail.png');
+      players[currentPlayer].logout;
+      terminateScript;
+    end;
+  Wait(GaussRangeInt(400, 800));
   Result := True;
 End;
 
 Function MakeItems: Boolean;
 Var
-  Time,X,Y: Integer;
+  Time,X,Y, i: Integer;
   T: TTimeMarker;
 Begin
   If Not IsLoggedIn Then
@@ -523,21 +568,30 @@ Begin
       AntiB:= RandomRange(0,500);
       MouseB:= RandomRange(0,3000);
 
-      Wait(GaussRangeInt(0, 500));
-      SendKeys(Players[CurrentPlayer].Strings[0], 60 + Random(60), 60 + Random(60));
-      Wait(GaussRangeInt(0, 100));
-      MouseBox([293,332,505,348]);
-      If Debug Then
-        Writeln('Waiting for HerbMenu');
-      T.Start;
-      Time:=GaussRangeInt(6000, 12000);
-      Repeat
-        If Productionscreen.IsOpen Then
-          Break;
-        Wait(GaussRangeInt(0, 500));
-        If (Not IsLoggedIn) Or (T.GetTime>Time) Then
-          Exit;
-      Until Productionscreen.IsOpen;
+      for i:=0 to 3 do
+      begin
+        wait(gaussRangeInt(0, 200));
+        if debug then
+          writeln('Sending quickkey to open menu');
+
+        sendKeys(Players[CurrentPlayer].Strings[0], 60 + Random(60), 60 + Random(60));
+        wait(GaussRangeInt(0, 100));
+
+        if debug then
+          writeln('Waiting for production or tool menu');
+
+        t.start;
+        time := gaussRangeInt(4000, 7000);
+        repeat
+          wait(gaussRangeInt(0, 100));
+
+          if t.getTime > time then
+            break;
+        until productionscreen.isOpen or toolscreen.isOpen;
+
+        if productionscreen.isOpen or toolscreen.isOpen then
+          break;
+      end;
 
       Wait(GaussRangeInt(0, 200));
 
@@ -570,7 +624,6 @@ Begin
 
       Wait(GaussRangeInt(0, 1500));
 
-      Timeout.Reset;
       Timeout.Start;
 
       If Debug Then
@@ -611,7 +664,6 @@ Begin
 
       TabBackpack.MouseSlot(Slot, Mouse_Left);
       Wait(GaussRangeInt(0, 200));
-      MouseBox(IntToBox(293,332,505,348),Mouse_Move,Mouse_Break);
 
       T.Reset;
       T.Start;
@@ -692,7 +744,8 @@ Begin
   End;
 
   If Not Debug Then
-    DisableSRLDebug:=True;
+    DisableSRLDebug:=True else
+    DisableSRLDebug:=false;
   ClearDebug;
 
   MainScreen.SetAngle(MS_ANGLE_HIGH);
@@ -745,7 +798,7 @@ Begin
   If Timeout.GetTime>300000 Then
   Begin
     Writeln('Nothing has happened for too long, shutting down!- took a screenshot, send pic to ashaman (in the logs folder)');
-    TakeScreenshot('HerbFail');
+    SaveScreenshot(ScriptPath + timeRunning() + '_' + 'HerbFail.png');
     TerminateScript;
   End;
 
