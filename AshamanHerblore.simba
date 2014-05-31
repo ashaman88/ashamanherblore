@@ -59,7 +59,7 @@ Var
   debug, normalBank: Boolean;
 
 Const
-  ScriptVersion = '2.1';
+  ScriptVersion = '2.2';
 
 procedure declarePlayers();
 var
@@ -119,12 +119,12 @@ begin
     checkBoxDefaults := ['True','True','True', 'False'];
 
     comboBoxLabels := ['CleanOrPots','Location','QuickLoad'];                                                // same as editBoxLabels but for combo boxes (drop down boxes)
-    comboBoxDefaults := ['Clean','BANK_NPC_BLUE','Normal'];
+    comboBoxDefaults := ['Clean','NPC_BLUE','Normal'];
 
     // this needs to be done for every element in the comboBoxLabels array
     setLength(comboBoxItems, length(comboBoxLabels));
     comboBoxItems[0] := ['Clean', 'Pots'];       // all the options available for the first combo box
-    comboBoxItems[1] := ['BANK_NPC_BLUE', 'BANK_NPC_GREY', 'BANK_NPC_GREEN', 'BANK_NPC_DRAYNOR', 'BANK_NPC_ROGUES_DEN', 'BANK_BOOTH', 'BANK_CHEST_SW', 'BANK_CHEST_SHANTAY', 'BANK_CHEST_DUEL', 'BANK_CHEST_CW', 'BANK_CHEST_GROTTO', 'BANK_CHEST_BURTHORPE'];       // all the options available for the first combo box
+    comboBoxItems[1] := ['NPC_BLUE', 'NPC_GREY', 'NPC_GREEN', 'NPC_DRAYNOR', 'BANK_BOOTH', 'CHEST_SW', 'CHEST_SHANTAY', 'CHEST_DUEL', 'CHEST_CW', 'CHEST_GROTTO', 'CHEST_LUMBRIDGE', 'TABLE_BURTHORPE'];       // all the options available for the first combo box
     comboBoxItems[2] := ['Normal', 'PRESET_1', 'PRESET_2'];
   end;
 end;
@@ -550,7 +550,8 @@ Begin
       players[currentPlayer].logout;
       terminateScript;
     end;
-  Wait(GaussRangeInt(400, 800));
+  If Lowercase(Players[CurrentPlayer].Strings[1])='clean' Then
+    Wait(GaussRangeInt(400, 800));
   Result := True;
 End;
 
