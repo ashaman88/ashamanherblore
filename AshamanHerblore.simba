@@ -48,18 +48,19 @@
 Program AshamanHerblore;
 
   {$DEFINE SMART}
+  {$DEFINE FAILSAFE}
   {$I SRL-6/SRL.Simba}
   {$i srl-6/lib/misc/srlplayerform.simba}
 
 Var
-  ItemCount,XP,StartingExperience,Slot,StartingXP,ItemsPH,XPH,Bir,Bfr,Stacks,StackCheck: Integer;
+  ItemCount,XP,StartingExperience,Slot,StartingXP,ItemsPH,XPH,Bir,Bfr,Stacks,StackCheck, slots: Integer;
   ItemType, TypeEdit: String;
   Timeout,CurrentBTime: TTimeMarker;
   W,X,Y,Z,RealBTime,BreakRounds,TotalBreaks,AntiB,MouseB: Integer;
   debug, normalBank: Boolean;
 
 Const
-  ScriptVersion = '2.2';
+  ScriptVersion = '2.3';
 
 procedure declarePlayers();
 var
@@ -101,6 +102,12 @@ begin
       // any other data types you've decided to use
       strings[0] := playerForm.players[i].settings[0]; //quickkey
       strings[1] := playerForm.players[i].settings[9]; //cleanorpots
+
+      if (not normalbank) and (strings[1] = 'Pots') then
+        slots := 14 else
+        slots := 28;
+
+      print('slots: ' + toStr(slots));
     end;
 end;
 
@@ -522,7 +529,7 @@ Begin
 
   T.Start;
   Repeat
-    If (TabBackpack.IsItemInSlot(28)) Then
+    If (TabBackpack.IsItemInSlot(slots)) Then
       Break;
     Wait(GaussRangeInt(0, 100));
     If (T.GetTime>8000) Then
@@ -539,7 +546,7 @@ Begin
     End;
     If Not IsLoggedIn Then
       Exit;
-  Until (TabBackpack.IsItemInSlot(28));
+  Until (TabBackpack.IsItemInSlot(slots));
 
 
   if chatbox.findTextOnLines(['could not be'], [0]) then
@@ -730,6 +737,11 @@ Begin
 
   declarePlayers();
 
+
+  If Not Debug Then
+    DisableSRLDebug:=True else
+    DisableSRLDebug:=false;
+
   SmartEnableDrawing := True;
   SRL_Events[EVENT_ANTIBAN] := @Antiban;
   smartPlugins := ['OpenGL32.dll','d3d9.dll'];
@@ -744,9 +756,6 @@ Begin
     Wait(RandomRange(6000,10000));
   End;
 
-  If Not Debug Then
-    DisableSRLDebug:=True else
-    DisableSRLDebug:=false;
   ClearDebug;
 
   MainScreen.SetAngle(MS_ANGLE_HIGH);
@@ -771,6 +780,8 @@ Begin
   StartingXP:=ChatBox.GetXP;
 
   FindNormalRandoms;
+
+  print('slots: ' + toStr(slots));
 End;
 
 Procedure Mainloop;
