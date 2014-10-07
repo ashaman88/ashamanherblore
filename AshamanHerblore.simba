@@ -64,7 +64,7 @@ Var
   StatsTimer: TTimeMarker;
 
 Const
-  ScriptVersion = '2.4';
+  ScriptVersion = '2.5';
 
 procedure declarePlayers();
 var
@@ -126,16 +126,29 @@ begin
 
     editBoxLabels := ['QuickKey', 'Minutes until Break', '# of Minutes to Break', 'World','#ofStacks']; // edit boxes are created for each array element
     editBoxDefaults := [ '0', '600', '15','0', '1'];                                             // optional default values for each edit box; array length must equal editBoxLabel length
+    editBoxHints := ['If cleaning herbs, which key do you have the herb set to in the action bar?',
+    'How many minutes do you want to run the script before you break?',
+    'How many minutes do you want to break for?',
+    'Which world do you want to login to? 0 is random',
+    'How many stacks of herbs do you want to mix?'];
+
     checkBoxLabels := ['Take Breaks', 'Switch Worlds (After Break)', 'Logout if Mod is near', 'Debug'];        // same as editBoxLabels but for check boxes
     checkBoxDefaults := ['True','True','True', 'False'];
+    checkBoxHints := ['Do you want to take breaks?',
+    'Do you want to switch worlds after you break?',
+    'Do you want to logout if a jmod is detected near you?',
+    'Do you want to run in debug mode? It prints out more debug and onscreen debug if there are issues'];
 
     comboBoxLabels := ['CleanOrPots','Location','QuickLoad'];                                                // same as editBoxLabels but for combo boxes (drop down boxes)
     comboBoxDefaults := ['Clean','NPC_BLUE','Normal'];
+    comboBoxHints := ['Are you cleaning herbs or mixing pots?',
+    'Which banking location are you using?',
+    'Do you want to use the Preset buttons for banking? Select which one'];
 
     // this needs to be done for every element in the comboBoxLabels array
     setLength(comboBoxItems, length(comboBoxLabels));
     comboBoxItems[0] := ['Clean', 'Pots'];       // all the options available for the first combo box
-    comboBoxItems[1] := ['NPC_BLUE', 'NPC_GREY', 'NPC_GREEN', 'NPC_DRAYNOR', 'BANK_BOOTH', 'CHEST_SW', 'CHEST_SHANTAY', 'CHEST_DUEL', 'CHEST_CW', 'CHEST_GROTTO', 'CHEST_LUMBRIDGE', 'TABLE_BURTHORPE'];       // all the options available for the first combo box
+    comboBoxItems[1] := ['NPC_BLUE', 'NPC_GREY', 'NPC_GREEN', 'NPC_DRAYNOR', 'BANK_BOOTH', 'CHEST_SW', 'CHEST_SHANTAY', 'CHEST_DUEL', 'CHEST_CW', 'CHEST_GROTTO', 'CHEST_LUMBRIDGE', 'TABLE_BURTHORPE', 'BANK_GE', 'PRIFDDINAS'];       // all the options available for the first combo box
     comboBoxItems[2] := ['Normal', 'PRESET_1', 'PRESET_2'];
   end;
 end;
@@ -328,7 +341,7 @@ Begin
 
   TTB := (((W) + (Y) + BreakRounds)-GetTimeRunning);
 
-  XP := (ChatBox.GetXP - StartingXP);
+  XP := (ChatBox.getXPBar - StartingXP);
   XPH := Round(XP * (3600.0 / (GetTimeRunning / 1000.0)));
   ItemsPH := Round((ItemCount * (3600.0 / (GetTimeRunning / 1000.0))));
 
@@ -764,7 +777,7 @@ Begin
   TabBackpack.Open;
 
   StatsTimer.start();
-  StartingXP:=ChatBox.GetXP;
+  StartingXP:=ChatBox.GetXPBar;
 
   FindNormalRandoms;
 
