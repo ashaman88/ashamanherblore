@@ -45,28 +45,25 @@
 ///////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////
-Program AshamanHerblore;
-
+program AshamanHerblore;
   {$DEFINE SMART}
   {$DEFINE FAILSAFE}
   {$I SRL-6/SRL.Simba}
   {$i srl-6/lib/misc/srlplayerform.simba}
 
-Var
-  ItemCount,XP,StartingExperience,Slot,StartingXP,ItemsPH,XPH,Bir,Bfr,Stacks,StackCheck, slots: Integer;
-  ItemType, TypeEdit: String;
-  Timeout,CurrentBTime: TTimeMarker;
-  W,X,Y,Z,RealBTime,BreakRounds,TotalBreaks,AntiB,MouseB: Integer;
+var
+  itemCount, xp, slot, startingXP, itemsPH, xph, bir, bfr, stacks, stackCheck, slots: integer;
+  itemType, typeEdit: string;
+  timeout, currentBTime: TTimeMarker;
+  W, X, Y, Z, realBTime, breakRounds, totalbreaks, antiB, mouseB, profit, totalProfit: integer;
   debug, normalBank: Boolean;
+  newValues, oldValues: array [0..2] of integer;
+  statsTimer: TTimeMarker;
 
-{ Stats }
-  NewValues, OldValues: array [0..2] of Integer;
-  StatsTimer: TTimeMarker;
+const
+  SCRIPT_VERSION = '2.6';
 
-Const
-  ScriptVersion = '2.5';
-
-procedure declarePlayers();
+procedure declareplayers();
 var
   i,j: integer;
 begin
@@ -82,34 +79,44 @@ begin
       integers[1] := strToInt(playerForm.players[i].settings[2]);  //minutes to break
 
       for j := 0 to high(playerForm.comboBoxItems[1]) do
-        if (playerForm.players[i].settings[10] = playerForm.comboBoxItems[1][j]) then
+        if (playerForm.players[i].settings[11] = playerForm.comboBoxItems[1][j]) then
           integers[2] := j;                                                  //bankinglocation
 
       Stacks := strToInt(playerForm.players[i].settings[4]);  //number of stacks
       World :=  strToInt(playerForm.players[i].settings[3]);                    //world
       ismember:=true;
 
-      if (playerForm.players[i].settings[11] = 'Normal') then
+      if (playerForm.players[i].settings[12] = 'Normal') then
         normalBank := true;
 
       if not normalBank then
         for j := 0 to high(playerForm.comboBoxItems[2]) do                            //quickload
-          if (playerForm.players[i].settings[11] = playerForm.comboBoxItems[2][j]) then
+          if (playerForm.players[i].settings[12] = playerForm.comboBoxItems[2][j]) then
             integers[4] := j+2;
 
       // booleans
-      booleans[0] := strToBool(playerForm.players[i].settings[5]);
-      booleans[1] := strToBool(playerForm.players[i].settings[6]);
-      FindMod := strToBool(playerForm.players[i].settings[7]);
-      debug := strToBool(playerForm.players[i].settings[8]);
+      booleans[0] := strToBool(playerForm.players[i].settings[6]);   //takebreaks
+      booleans[1] := strToBool(playerForm.players[i].settings[7]);   //switchworlds
+      FindMod := strToBool(playerForm.players[i].settings[8]);      //mods
+      debug := strToBool(playerForm.players[i].settings[9]);     //debug
 
       // any other data types you've decided to use
       strings[0] := playerForm.players[i].settings[0]; //quickkey
-      strings[1] := playerForm.players[i].settings[9]; //cleanorpots
+      strings[1] := playerForm.players[i].settings[10]; //cleanorpots
 
       if (not normalbank) and (strings[1] = 'Pots') then
         slots := 14 else
         slots := 28;
+
+      if (playerForm.players[i].settings[5] = '') then
+      begin
+        writeln('No UserAgent detected. Opening up webpage to get userAgent');
+        openWebPage('http://whatsmyuseragent.com/');
+        writeln('Copy your useragent text and paste it into the form');
+        writeln('Restart script');
+        terminateScript;
+      end else
+        smartUserAgent := playerForm.players[i].settings[5]; //useragent
 
       print('slots: ' + toStr(slots));
     end;
@@ -120,19 +127,20 @@ procedure initPlayerForm();
 begin
   with playerForm do
   begin
-    name := 'AshamanHerblore v'+toStr(ScriptVersion); // the title of the SPF, usually the name of your script
+    name := 'AshamanHerblore v'+toStr(SCRIPT_VERSION); // the title of the SPF, usually the name of your script
     scriptHelpThread := '';           // a link to a help thread, if set to '' will link to my setup guide
     scriptSettingsPath := '';         // where you want the settings file to be saved; saved in script's path by default
 
-    editBoxLabels := ['QuickKey', 'Minutes until Break', '# of Minutes to Break', 'World','#ofStacks']; // edit boxes are created for each array element
-    editBoxDefaults := [ '0', '600', '15','0', '1'];                                             // optional default values for each edit box; array length must equal editBoxLabel length
-    editBoxHints := ['If cleaning herbs, which key do you have the herb set to in the action bar?',
+    editBoxLabels := ['QuickKey', 'Minutes until break', '# of Minutes to break', 'World', '#ofStacks', 'Client UserAgent']; // edit boxes are created for each array element
+    editBoxDefaults := [ '0', '600', '15','0', '1', ''];                                             // optional default values for each edit box; array length must equal editBoxLabel length
+    editBoxHints := ['if cleaning herbs, which key do you have the herb set to in the action bar?',
     'How many minutes do you want to run the script before you break?',
     'How many minutes do you want to break for?',
     'Which world do you want to login to? 0 is random',
-    'How many stacks of herbs do you want to mix?'];
+    'How many stacks of herbs do you want to mix?',
+    'If you don''t know this, a popup will walk you through it after you hit start'];
 
-    checkBoxLabels := ['Take Breaks', 'Switch Worlds (After Break)', 'Logout if Mod is near', 'Debug'];        // same as editBoxLabels but for check boxes
+    checkBoxLabels := ['Take breaks', 'Switch Worlds (After break)', 'Logout if Mod is near', 'Debug'];        // same as editBoxLabels but for check boxes
     checkBoxDefaults := ['True','True','True', 'False'];
     checkBoxHints := ['Do you want to take breaks?',
     'Do you want to switch worlds after you break?',
@@ -163,10 +171,10 @@ begin
   for i := 0 to high(players) do
   begin
     writeln('QuickKey:          ', players[i].strings[0]);
-    writeln('Minutes until Break:            ', players[i].integers[0]);
-    writeln('# of Minutes to Break: ', players[i].integers[1]);
-    writeln('Take Breaks:        ', players[i].booleans[0]);
-    writeln('Switch Worlds (After Break):        ', players[i].booleans[1]);
+    writeln('Minutes until break:            ', players[i].integers[0]);
+    writeln('# of Minutes to break: ', players[i].integers[1]);
+    writeln('Take breaks:        ', players[i].booleans[0]);
+    writeln('Switch Worlds (After break):        ', players[i].booleans[1]);
     writeln('Logout if Mod is near:        ', players[i].findmod);
     writeln('CleanOrPots:        ', players[i].strings[1]);
     writeln('Location:        ', players[i].integers[2]);
@@ -175,22 +183,22 @@ begin
 end;
 
 {*******************************************************************************
-Function AutoupdateMe;
+function AutoupdateMe;
 By: Shuttleu
 Edited By: Ashaman88
 Description: Autoupdates Script.
 *******************************************************************************}
-Procedure AutoUpdateMe;
-Var
-  Neifile: Integer;
+procedure autoUpdateMe;
+var
+  Neifile: integer;
   OnlineVersion, NewScript, NeiFeilNennen: String;
-Begin
-  Writeln('Checking for script updates...');
+begin
+  writeln('Checking for script updates...');
   OnlineVersion := GetPage('http://ashamanherblore.googlecode.com/git/Version.txt');
-  Writeln('Online Version: '+ToStr(OnlineVersion));
-  Writeln('Local Version: '+ToStr(ScriptVersion));
-  If (trim(OnlineVersion) > ScriptVersion) Then
-  Begin
+  writeln('Online Version: '+ToStr(OnlineVersion));
+  writeln('Local Version: '+ToStr(SCRIPT_VERSION));
+  if (trim(OnlineVersion) > SCRIPT_VERSION) then
+  begin
     WriteLn('Newer script version online!');
     WriteLn('Autoupdating to newer version.');
     NewScript := GetPage('http://ashamanherblore.googlecode.com/git/AshamanHerblore.simba');
@@ -199,107 +207,52 @@ Begin
     Try
       WriteFileString(Neifile, NewScript);
     Except
-      Begin
+      begin
         WriteLn('Fatal error writing to '+NeiFeilNennen+'!!');
         Terminatescript;
-      End;
-    End;
+      end;
+    end;
     CloseFile(Neifile);
     WriteLn('New script downloaded to '+NeiFeilNennen+'!! Please use this one!!');
-    TerminateScript;
-  End Else
+    terminateScript;
+  end Else
     WriteLn('You have the latest version of the script!');
-End;
+end;
 
-(*
-TRSChatbox.getXP
-~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: pascal
-
-    function TRSChatbox.getXP(): integer;
-
-Initiates the chatbox variable.
-
-.. note::
-
-    - by Ashaman88
-    - Last Updated: 01 January 2013 by Ashaman88
-
-Example:
-
-.. code-block:: pascal
-
-    xp:= chatbox.getXP;
-    writeln('Starting with ' + toStr(xp) + ' XP.');
-*)
-{function TRSChatBox.getXP(): integer;
-var
-  b: TBox;
-  s: String;
-  tpa : TPointArray;
-  atpa : T2DPointArray;
-  i,p: Integer;
+procedure findNormalrandoms;
 begin
-  b := self.getBounds();
-  b.edit(+(b.x2-b.x1)-140, +10, -5, -94);
-
-  findColorsTolerance(tpa, 14013909, b, 4,colorSetting(2, 0.00, 0.00));
-
-  if length(tpa) < 2 then
-  begin
-    print('chatBox.getXP(): No XP found', TDebug.SUB);
-    Exit;
-  end;
-
-  atpa := tpa.cluster(5);
-
-  b:= atpa.getbounds;
-  b.edit(-2,-2,+2,+3);
-
-  s:=Replace(tesseractgettext(b.x1,b.y1,b.x2,b.y2, FILTER_SMALL_CHARS), ' ', '', [rfReplaceAll]);
-
-  p := Pos('x', S);
-  if p > 0 then
-    Result := StrToIntDef(ExtractFromStr(Copy(s, p, Length(S)), Numbers), 0)
-  else
-    Result := StrToIntDef(ExtractFromStr(s, Numbers), 0);
-
-  print('chatBox.getXP(): XP found: ' + tostr(result), TDebug.SUB);
-end;     }
-
-Procedure FindNormalRandoms;
-Begin
-  ExitSquealOfFortune;
+  exitSquealOfFortune;
   ClaimSpinTicket;
-End;
+  closePollWindow();
+  closeAdWindow();
+end;
 
-Function Antiban: Boolean;
-Var
-  I: Integer;
-Begin
-  I := Random(600);
-  Case I Of
+procedure antiban;
+var
+  i: integer;
+begin
+  i := random(600);
+  case i of
     1: boredHuman(false);
     2..7:
-      Begin
+      begin
         hoverSkill(Skill_Herblore);
-        Wait(GaussRangeInt(1000,2000));
-      End;
+        wait(gaussRangeInt(1000, 2000));
+      end;
     8..50: mouseMovingObject;
-    51..100: SleepAndMoveMouse(RandomRange(100,MouseB));
+    51..100: sleepAndMoveMouse(randomRange(100, mouseB));
     101..400:
-      Begin
-        MouseOffClient(Random(4));
-        Wait(RandomRange(2000, MouseB));
-      End;
-    501..600: Wait(RandomRange(1000, 2000));
+      begin
+        mouseOffClient(4);
+        wait(randomRange(2000, mouseB));
+      end;
+    501..600: wait(randomRange(1000, 2000));
 
-  End;
-  Wait(GaussRangeInt(0, AntiB));
-End;
+  end;
+  wait(gaussRangeInt(0, antiB));
+end;
 
-{ Calculated stats before sending to server }
+{ Calculated stats before sending to server by the Mayor}
 procedure calculateStats();
 var
   i: integer;
@@ -314,17 +267,17 @@ begin
  	end;
 end;
 
-{ Sends stats to server }
+{ Sends stats to server by the Mayor}
 function sendStats(): boolean;
 var
   c, i: integer;
- 	statVars: Array [0..2] of string;
+ 	statvars: Array [0..2] of string;
 begin
-  statVars := ['Time', 'Items', 'XP'];
+  statvars := ['Time', 'Items', 'XP'];
   c := initializeHTTPClient(false);
 
-	for i := 0 to high(statVars) do
-	  addPostVariable(c, statVars[i], intToStr(newValues[i]));
+	for i := 0 to high(statvars) do
+	  addPostvariable(c, statvars[i], intToStr(newValues[i]));
 
   result := pos('true', lowercase(postHTTPPageEx(c, 'http://srlmayor.com/mayorstats/asha/AshaStats.php'))) <> 0;
   freeHTTPClient(c);
@@ -332,401 +285,404 @@ begin
     calculateStats();
 end;
 
-Procedure ProgressReport;
-Var
-  TTB: Integer;
-  Method: String;
-Begin
-  ClearDebug;
+procedure progressReport;
+var
+  ttb, profitPH: integer;
+  method: String;
+begin
+  clearDebug;
 
-  TTB := (((W) + (Y) + BreakRounds)-GetTimeRunning);
+  ttb := (((W) + (Y) + breakRounds) - getTimeRunning);
 
-  XP := (ChatBox.getXPBar - StartingXP);
-  XPH := Round(XP * (3600.0 / (GetTimeRunning / 1000.0)));
-  ItemsPH := Round((ItemCount * (3600.0 / (GetTimeRunning / 1000.0))));
+  xp := (chatBox.getXPBar - startingXP);
+  xph := round(xp * (3600.0 / (getTimeRunning / 1000.0)));
 
-  Case Lowercase(Players[CurrentPlayer].Strings[1]) Of
-    'clean': Method:= 'Cleaned';
-    'pots':  Method:= 'Made';
-  End;
+  totalProfit := (itemCount * profit);
+  profitPH := round((totalProfit * (3600.0 / (getTimeRunning / 1000.0))));
+
+  itemsPH := round((itemCount * (3600.0 / (getTimeRunning / 1000.0))));
+
+  case players[currentPlayer].strings[1] of
+    'Clean': method := 'Cleaned';
+    'Pots':  method := 'Made';
+  end;
 
   writeln('|=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=|');
-  writeln('|                  AshamanHerblore v'+PadR(toStr(ScriptVersion), 24), '|');
+  writeln('|                  AshamanHerblore v'+padR(toStr(SCRIPT_VERSION), 24), '|');
   writeln('|=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=|');
-  writeln(PadR('| Running For: '+TimeRunning, 60)+'|');
-  writeln(PadR('| '+ItemType+'''s '+Method+': ' + GroupDigits(ItemCount,','), 40) + padR(Method+'/H: ' + GroupDigits(ItemsPH,','), 20) + '|');
-  writeln(PadR('| Exp Earned: ' + GroupDigits(XP,','), 40) + padR('Exp/Hour: ' + GroupDigits(XPH,','), 20) + '|');
-  writeln('|___________________________________________________________|');
+  writeln(padR('| Running For: '+ timeRunning, 60)+'|');
+  writeln(padR('| '+ itemType + '''s ' + method + ': ' + groupDigits(itemCount, ','), 37) + padR(method + '/H: ' + groupDigits(itemsPH, ','), 23) + '|');
+  writeln(padR('| Exp Earned: ' + groupDigits(xp, ','), 37) + padR('Exp/Hour: ' + groupDigits(xph, ','), 23) + '|');
+  writeln(padR('| Profit: ' + groupDigits(profit,','), 37) + padR('Profit/Hour: ' + groupDigits(profitPH,','), 23) + '|');
   writeln('|___________________________________________________________|');
 
-  If Players[CurrentPlayer].Booleans[0] Then
-    Writeln('Time until break: '+MsToTime(TTB, Time_Bare));
+  disguise(itemType + '''s ' + method + ': ' + groupDigits(itemCount, ','));
 
-  if StatsTimer.getTime() > 300000 then
+  if players[currentPlayer].booleans[0] then
+    writeln('Time until break: '+ msToTime(ttb, Time_Bare));
+
+  if statsTimer.getTime() > 300000 then
  	  if sendStats() then
- 		begin
- 		  writeLn('Successfully committed stats');
- 		  StatsTimer.reset();
- 		  StatsTimer.start();
- 		end else
+ 		  statsTimer.start() else
  		  writeLn('Failed to send stats');
-End;
+end;
 
-Function BreakHandler(BreakIn, BreakFor, randBreakIn, randBreakFor: Integer): Boolean;
-Var
-  H,M,S: Integer;
-Begin
-  If Not IsLoggedIn Then
-    Exit;
+function getProfit(herb, page: string): integer; // credit to euphemism
+var
+  potString, potProfit: string;
+  options: TReplaceFlags;
+begin
+  options := [rfReplaceAll, rfIgnoreCase];
+  potString := replace(herb, ' ', '_', options);
+  potString := between('<a href="/wiki/' + potString + '"', '</tr>', getPage(page));
 
-  If (GetTimeRunning < ((W) + (Y) + BreakRounds)) Then
-    Exit Else
-    If (GetTimeRunning > ((W) + (Y) + BreakRounds)) Then
-    Begin
+  potProfit := between('&#160;', '<', potString);
+  potProfit := replace(potProfit, ',', '', []);
+
+  result := strToIntDef(potProfit, -1);
+  writeln('Profit per ' + herb + ': '+toStr(result));
+end;
+
+function breakHandler(breakIn, breakFor, randbreakIn, randbreakFor: integer): Boolean;
+var
+  H,M,S: integer;
+begin
+  if not isLoggedIn then
+    exit;
+
+  if (getTimeRunning < ((W) + (Y) + breakRounds)) then
+    exit Else
+    if (getTimeRunning > ((W) + (Y) + breakRounds)) then
+    begin
       RealBTime := Round((X+Z)/60000);
-      Writeln('Taking a break for about ' + IntToStr(RealBTime) + ' minutes.');
-      Players[CurrentPlayer].Logout;
-      CurrentBTime.Reset;
-      CurrentBTime.Start;
-      Repeat
-        Wait(21000);
-        ConvertTime((X+Z)-CurrentBTime.GetTime,H,M,S);
-        Writeln('Breaktime left: '+IntToStr(H)+':'+IntToStr(M)+':'+IntToStr(S));
-      Until(CurrentBTime.GetTime>(X+Z));
-      Writeln('Logging in.');
-      If Players[CurrentPlayer].booleans[1] Then
-        Players[CurrentPlayer].World := 0;
-      Players[CurrentPlayer].Login;
-      Wait(4000);
-      Timeout.Reset;
-      Timeout.Start;
-      Result := IsLoggedIn;
-      Minimap.SetAngle(MM_DIRECTION_EAST);
-      MainScreen.SetAngle(MS_ANGLE_HIGH);
-      IncEx(BreakRounds, (W) + (X));
-      Inc(TotalBreaks);
-      Writeln('The next break will occur in about ' + IntToStr(BreakIn) + ' minutes.');
-      W := (BreakIn * 60000);
-      X := (BreakFor * 60000);
-      Y := RandomRange(-BIR * 60000, BIR * 60000);
-      Z := RandomRange(-BFR * 60000, BFR * 60000);
-    End;
-End;
+      writeln('Taking a break for about ' + IntToStr(RealBTime) + ' minutes.');
+      players[currentPlayer].Logout;
+      currentBTime.Reset;
+      currentBTime.start;
+      repeat
+        wait(21000);
+        ConvertTime((X+Z)-currentBTime.getTime,H,M,S);
+        writeln('breaktime left: '+IntToStr(H)+':'+IntToStr(M)+':'+IntToStr(S));
+      until(currentBTime.getTime>(X+Z));
+      writeln('Logging in.');
+      if players[currentPlayer].booleans[1] then
+        players[currentPlayer].world := 0;
+      players[currentPlayer].login;
+      wait(4000);
+      timeout.start;
+      Result := isLoggedIn;
+      minimap.setAngle(MM_DIRECTION_EAST);
+      mainScreen.setAngle(MS_ANGLE_HIGH);
+      IncEx(breakRounds, (W) + (X));
+      Inc(Totalbreaks);
+      writeln('The next break will occur in about ' + IntToStr(breakIn) + ' minutes.');
+      W := (breakIn * 60000);
+      X := (breakFor * 60000);
+      Y := randomRange(-BIR * 60000, BIR * 60000);
+      Z := randomRange(-BFR * 60000, BFR * 60000);
+    end;
+end;
 
-Function Banking: Boolean;
-Var
-  T: TTimeMarker;
-  Time: Integer;
-Begin
-  If Not IsLoggedIn Then
-    Exit;
-  T.Start;
+function banking: boolean;
+var
+  t: TTimeMarker;
+  time: integer;
+begin
+  if not isLoggedIn then
+    exit;
+  t.start;
   SRL_Events[EVENT_ANTIBAN] := nil;
-  Time:=GaussRangeInt(15000, 24000);
-  Repeat
-    Wait(Random(100));
-    If Bankscreen.Open(Players[CurrentPlayer].Integers[2]) Then
-      Break Else
-      Begin
-        Minimap.SetAngle(MM_DIRECTION_NORTH);
-        MainScreen.SetAngle(MS_ANGLE_HIGH);
-      End;
-    If (T.GetTime>Time) Or (Not IsLoggedIn) Then
-      Exit;
-  Until (BankScreen.IsOpen Or Pinscreen.IsOpen);
+  time := gaussRangeInt(15000, 24000);
+  repeat
+    wait(random(100));
+    if bankscreen.open(players[currentPlayer].integers[2]) then
+      break else
+      begin
+        minimap.setAngle(MM_DIRECTION_NORTH);
+        mainScreen.setAngle(MS_ANGLE_HIGH);
+      end;
+    if (t.getTime > time) or (not isLoggedIn) then
+      exit;
+  until (bankScreen.isOpen or pinscreen.isOpen);
 
-  SRL_Events[EVENT_ANTIBAN] := @Antiban;
+  SRL_Events[EVENT_ANTIBAN] := @antiban;
 
-  PinScreen.Enter(Players[CurrentPlayer].BankPin);
+  pinScreen.Enter(players[currentPlayer].bankPin);
 
   if normalBank then
-    If BankScreen.GetPackCount > 0 Then
-      BankScreen.QuickDeposit(QUICK_DEPOSIT_INVENTORY);
+    if bankScreen.GetPackCount > 0 then
+      bankScreen.QuickDeposit(QUICK_DEPOSIT_INVENTORY);
 
-  Case Lowercase(Players[CurrentPlayer].Strings[1]) Of
-    'clean':
-    Begin
-      T.Start;
-      Time:=GaussRangeInt(8000, 12000);
-      Repeat
+  case players[currentPlayer].strings[1] of
+    'Clean':
+    begin
+      t.start;
+      time := gaussRangeInt(8000, 12000);
+      repeat
         if normalBank then
         begin
           if bankScreen.withdraw(10, WITHDRAW_AMOUNT_ALL, ['']) then
             break;
         end else
-          If bankScreen.clickButton(Players[CurrentPlayer].Integers[4]) Then
-            Break;
-        If (T.GetTime>Time) Or (Not IsLoggedIn) Then
-          Exit;
-        Wait(GaussRangeInt(0, 1500));
-      Until False;
-    End;
+          if bankScreen.clickButton(players[currentPlayer].integers[4]) then
+            break;
+        if (t.getTime > time) or (not isLoggedIn) then
+          exit;
+        wait(gaussRangeInt(0, 1500));
+      until false;
+    end;
 
-    'pots':
-    Begin
-      T.Start;
-      Time:=GaussRangeInt(8000, 12000);
-      Repeat
+    'Pots':
+    begin
+      t.start;
+      time := gaussRangeInt(8000, 12000);
+      repeat
         if normalBank then
         begin
-          If BankScreen.Withdraw(10, 14, ['']) Then
-            Break;
+          if bankScreen.withdraw(10, 14, ['']) then
+            break;
         end else
-          If bankScreen.clickButton(Players[CurrentPlayer].Integers[4]) Then
-            Break;
-        If (T.GetTime>Time) Or (Not IsLoggedIn) Then
-          Exit;
-        Wait(GaussRangeInt(0, 1500));
-      Until False;
+          if bankScreen.clickButton(players[currentPlayer].integers[4]) then
+            break;
+        if (t.getTime > time) or (not isLoggedIn) then
+          exit;
+        wait(gaussRangeInt(0, 1500));
+      until false;
 
       if normalBank then
       begin
-        T.Start;
-        Time:=GaussRangeInt(8000, 12000);
-        Repeat
-          If BankScreen.Withdraw(9, 14, ['']) Then
-            Break;
-          If (T.GetTime>Time) Or (Not IsLoggedIn) Then
-            Exit;
-          Wait(GaussRangeInt(0, 1500));
-        Until False;
+        t.start;
+        time := gaussRangeInt(8000, 12000);
+        repeat
+          if bankScreen.withdraw(9, 14, ['']) then
+            break;
+          if (t.getTime > time) Or (not isLoggedIn) then
+            exit;
+          wait(gaussRangeInt(0, 1500));
+        until false;
       end;
-    End;
-  End;
-
-  if normalBank then
-    BankScreen.Close else
-  begin
-    t.start;
-    Time:=GaussRangeInt(4000, 8000);
-
-    Repeat
-      if not bankScreen.__find() then
-        Break;
-      If (T.GetTime>Time) Or (Not IsLoggedIn) Then
-        Exit;
-      Wait(GaussRangeInt(0, 200));
-    Until False;
+    end;
   end;
 
+  if normalBank then
+    bankScreen.close else
+  begin
+    t.start;
+    time := gaussRangeInt(4000, 8000);
 
-  Case Random(10) Of
-    0..7: Slot:=11;
-    8..9: Slot:=12;
-  End;
+    repeat
+      if not bankScreen.__find() then
+        break;
+      if (t.getTime > time) Or (not isLoggedIn) then
+        exit;
+      wait(gaussRangeInt(0, 200));
+    until false;
+  end;
 
-  If Lowercase(Players[CurrentPlayer].Strings[1])='pots' Then
-  Begin
-    Case Random(10) Of
-        0..7: Slot:=11;
-        8..9: Slot:=12;
-      End;
+  if players[currentPlayer].strings[1] = 'Pots' then
+  begin
+    case random(10) of
+      0..7: slot := 11;
+      8..9: slot := 12;
+    end;
 
-    TabBackpack.MouseSlot(Slot, Mouse_Move);
-  End;
+    tabBackpack.mouseSlot(slot, MOUSE_MOVE);
+  end;
 
-  Wait(GaussRangeInt(0, 100));
+  wait(gaussRangeInt(0, 100));
 
-  T.Start;
-  Repeat
-    If (TabBackpack.IsItemInSlot(slots)) Then
-      Break;
-    Wait(GaussRangeInt(0, 100));
-    If (T.GetTime>8000) Then
-    Begin
-      If (Stacks>1) And (StackCheck<Stacks) Then
-      Begin
-        Inc(StackCheck);
-        Exit;
-      End;
-      Writeln('Failed withdrawing, shutting down - took a screenshot, send pic to ashaman (in the logs folder)');
-      SaveScreenshot(ScriptPath + timeRunning() + '_' + 'HerbFail.png');
-      Players[CurrentPlayer].Logout;
-      TerminateScript;
-    End;
-    If Not IsLoggedIn Then
-      Exit;
-  Until (TabBackpack.IsItemInSlot(slots));
+  t.start;
+  repeat
+    if (tabBackpack.isItemInSlot(slots)) then
+      break;
+    wait(gaussRangeInt(0, 100));
+    if (t.getTime > 8000) then
+    begin
+      if (stacks > 1) And (stackCheck < stacks) then
+      begin
+        inc(stackCheck);
+        exit;
+      end;
+      writeln('Failed withdrawing, shutting down - took a screenshot, send pic to ashaman (in the logs folder)');
+      if debug then
+        saveScreenshot(scriptPath + timeRunning() + '_' + 'HerbFail.png');
+      players[currentPlayer].logout;
+      terminateScript;
+    end;
+    if not isLoggedIn then
+      exit;
+  until (tabBackpack.isItemInSlot(slots));
 
 
   if chatbox.findTextOnLines(['could not be'], [0]) then
     if countColorTolerance(66033, chatbox.lineBoxes[0], 10) > 100 then
     begin
       writeln('Failed withdrawing, shutting down - took a screenshot, send pic to ashaman (in the scripts folder)');
-      saveScreenshot(scriptPath + timeRunning() + '_' + 'HerbFail.png');
+      if debug then
+        saveScreenshot(scriptPath + timeRunning() + '_' + 'HerbFail.png');
       players[currentPlayer].logout;
       terminateScript;
     end;
-  If Lowercase(Players[CurrentPlayer].Strings[1])='clean' Then
-    Wait(GaussRangeInt(400, 800));
-  Result := True;
-End;
 
-Function MakeItems: Boolean;
-Var
-  Time,X,Y, i: Integer;
+  if players[currentPlayer].strings[1] = 'Clean' then
+    wait(gaussRangeInt(400, 800));
+
+  result := true;
+end;
+
+function makeItems: boolean;
+var
+  time,X,Y, i: integer;
   T: TTimeMarker;
-Begin
-  If Not IsLoggedIn Then
-    Exit;
-  TabBackpack.Open;
-  Case Lowercase(Players[CurrentPlayer].Strings[1]) Of
-    'clean':
-    Begin
-      AntiB:= RandomRange(0,500);
-      MouseB:= RandomRange(0,3000);
-
-      for i:=0 to 3 do
+begin
+  if not isLoggedIn then
+    exit;
+  tabBackpack.Open;
+  case players[currentPlayer].strings[1] of
+    'Clean':
       begin
-        wait(gaussRangeInt(0, 200));
-        if debug then
-          writeln('Sending quickkey to open menu');
+        antiB := randomRange(0, 500);
+        mouseB := randomRange(0, 3000);
 
-        sendKeys(Players[CurrentPlayer].Strings[0], 60 + Random(60), 60 + Random(60));
-        wait(GaussRangeInt(0, 100));
+        for i := 0 to 3 do
+        begin
+          wait(gaussRangeInt(0, 200));
+          print('Sending quickkey to open menu');
 
-        if debug then
-          writeln('Waiting for production or tool menu');
-
-        t.start;
-        time := gaussRangeInt(4000, 7000);
-        repeat
+          sendKeys(players[currentPlayer].strings[0], 60 + random(60), 60 + random(60));
           wait(gaussRangeInt(0, 100));
 
-          if t.getTime > time then
+          print('waiting for production or tool menu');
+
+          t.start;
+          time := gaussRangeInt(4000, 7000);
+          repeat
+            wait(gaussRangeInt(0, 100));
+
+            if t.getTime > time then
+              break;
+          until productionscreen.isOpen or toolscreen.isOpen;
+
+          if productionscreen.isOpen or toolscreen.isOpen then
             break;
-        until productionscreen.isOpen or toolscreen.isOpen;
+        end;
 
-        if productionscreen.isOpen or toolscreen.isOpen then
-          break;
+        wait(gaussRangeInt(0, 200));
+
+        if itemType = '' then
+        begin
+          itemType := productionScreen.getSelectedBoxText;
+          itemType := copy(itemType, 7, length(itemType));
+          typeEdit := toStr(itemType[1]);
+          itemType := copy(itemType, 2, length(itemType));
+          itemType := (uppercase(typeEdit) + itemType);
+          itemType := trim(itemType);
+          profit := getProfit(itemType, 'http://runescape.wikia.com/wiki/Calculator:Herblore/Herbs');
+        end;
+
+        print('HerbMenu is here');
+
+        productionScreen.clickStart;
+
+        print('waiting for StatusMenu');
+
+        SRL_Events[EVENT_ANTIBAN] := nil;
+        if not tabBackpack.waitSlotPixelChange(3, gaussRangeInt(10000, 20000)) then
+        begin
+          SRL_Events[EVENT_ANTIBAN] := @antiban;
+          exit;
+        end;
+
+        SRL_Events[EVENT_ANTIBAN] := @antiban;
+
+        wait(gaussRangeInt(0, 1500));
+
+        timeout.start;
+
+        if not tabBackpack.waitSlotPixelChange(28, gaussRangeInt(25000, 45000)) then
+          exit;
+
+        print('last slot changed');
+        itemCount := itemCount + 28;
       end;
+    'Pots':
+      begin
+        antiB := 3000;
+        mouseB := 6000;
 
-      Wait(GaussRangeInt(0, 200));
+        getMousePOS(x, y);
+        if slot = 0 then
+          slot := 1;
+        if not pointInBox(point(x, y), tabBackpack.getSlotBox(11)) and not pointInBox(point(x, y), tabBackpack.getSlotBox(12)) then
+        begin
+          case random(10) of
+            0..7: slot := 11;
+            8..9: slot := 12;
+          end;
+        end;
+        tabBackpack.mouseSlot(slot, MOUSE_LEFT);
+        wait(gaussRangeInt(0, 100));
 
-      If ItemType = '' Then
-      Begin
-        ItemType:= Productionscreen.getSelectedBoxText;
-        ItemType:= Copy(ItemType, 7, Length(ItemType));
-        TypeEdit:= ToStr(ItemType[1]);
-        ItemType:= Copy(ItemType, 2, Length(ItemType));
-        ItemType:= (Uppercase(TypeEdit)+ItemType);
-        ItemType:= Trim(ItemType);
-      End;
+        case random(10) of
+          0..7: slot := 16;
+          8..9: slot := 17;
+        end;
 
-      If Debug Then
-        Writeln('HerbMenu is here');
+        tabBackpack.mouseSlot(slot, MOUSE_LEFT);
+        wait(gaussRangeInt(0, 200));
 
-      Productionscreen.ClickStart;
+        t.start;
+        time := gaussRangeInt(6000, 12000);
+        repeat
+          if productionScreen.isOpen then
+            break;
+          wait(gaussRangeInt(0, 500));
+          if (not isLoggedIn) Or (t.getTime > time) then
+            exit;
+        until productionScreen.IsOpen;
 
-      If Debug Then
-        Writeln('Waiting for StatusMenu');
+        wait(gaussRangeInt(0, 400));
 
-      SRL_Events[EVENT_ANTIBAN] := nil;
-      If Not TabBackpack.waitSlotPixelChange(3,GaussRangeInt(10000, 20000)) Then
-      Begin
-        SRL_Events[EVENT_ANTIBAN] := @Antiban;
-        Exit;
-      End;
+        if itemType = '' then
+        begin
+          itemType:= productionScreen.getSelectedBoxText;
+          profit := getProfit(itemType, 'http://runescape.wikia.com/wiki/Calculator:Herblore/Unfinished_potions');
+        end;
 
-      SRL_Events[EVENT_ANTIBAN] := @Antiban;
+        productionScreen.clickStart;
 
-      Wait(GaussRangeInt(0, 1500));
+        if not tabBackpack.waitForShift(randomRange(2000, 4000)) then
+          exit;
 
-      Timeout.Start;
+        wait(gaussRangeInt(0, 1500));
 
-      If Debug Then
-        Writeln('StatusMenu is here');
+        timeout.start;
 
-      If Debug Then
-        Writeln('Waiting for StatusMenu to leave');
+        t.start;
+        time := gaussRangeInt(25000, 45000);
+        repeat
+          wait(gaussRangeInt(0, 900));
+          antiBan;
+          if (not isLoggedIn) or (t.getTime > time) then
+            exit;
+        until not (tabBackpack.IsItemInSlot(28));
 
-      If Not TabBackpack.waitSlotPixelChange(28,GaussRangeInt(25000, 45000)) Then
-        Exit;
+        itemCount := itemCount + 14;
+      end;
+    else
+    begin
+      writeln('CleanOrPots type wrong, shutting down');
+      terminateScript;
+    end;
+  end;
+  result := true;
+end;
 
-      If Debug Then
-        Writeln('StatusMenu is gone');
-      ItemCount := ItemCount + 28;
-    End;
-    'pots':
-    Begin
-      AntiB:= 3000;
-      MouseB:= 6000;
-
-      GetMousePOS(X,Y);
-      If Slot = 0 Then
-        Slot:=1;
-      If Not PointInBox(Point(X,Y),TabBackpack.GetSlotBox(11)) And Not PointInBox(Point(X,Y),TabBackpack.GetSlotBox(12)) Then
-      Begin
-        Case Random(10) Of
-          0..7: Slot:=11;
-          8..9: Slot:=12;
-        End;
-      End;
-      TabBackpack.MouseSlot(Slot, Mouse_Left);
-      Wait(GaussRangeInt(0, 100));
-
-      Case Random(10) Of
-        0..7: Slot:=16;
-        8..9: Slot:=17;
-      End;
-
-      TabBackpack.MouseSlot(Slot, Mouse_Left);
-      Wait(GaussRangeInt(0, 200));
-
-      T.Reset;
-      T.Start;
-      Time:=GaussRangeInt(6000, 12000);
-      Repeat
-        If Productionscreen.IsOpen Then
-          Break;
-        Wait(GaussRangeInt(0, 500));
-        If (Not IsLoggedIn) Or (T.GetTime>Time) Then
-          Exit;
-      Until Productionscreen.IsOpen;
-
-      Wait(GaussRangeInt(0, 400));
-
-      If ItemType = '' Then
-        ItemType:= Productionscreen.getSelectedBoxText;
-
-
-      Productionscreen.ClickStart;
-
-
-      If Not TabBackpack.WaitForShift(RandomRange(2000,4000)) Then
-        Exit;
-
-      Wait(GaussRangeInt(0, 1500));
-
-      Timeout.Reset;
-      Timeout.Start;
-
-      T.Reset;
-      T.Start;
-      Time:=GaussRangeInt(25000, 45000);
-      Repeat
-        Wait(GaussRangeInt(0, 900));
-        AntiBan;
-        If (Not IsLoggedIn) Or (T.GetTime>Time) Then
-          Exit;
-      Until Not (TabBackpack.IsItemInSlot(28));
-
-      ItemCount := ItemCount + 14;
-    End;
-    Else
-    Begin
-      Writeln('CleanOrPots type wrong, shutting down');
-      TerminateScript;
-    End;
-  End;
-  Result := True;
-End;
-
-Procedure Setup
-Begin
-  ClearDebug;
-  disableSRLLog:=true;
-  AutoUpdateMe;
+procedure setup;
+begin
+  clearDebug;
+  disableSRLLog := true;
+  autoUpdateMe;
 
   initPlayerForm(); // initiate your settings
   runPlayerForm();  // run the form
@@ -735,91 +691,108 @@ Begin
   if (not playerForm.isScriptReady) then
     terminatescript;
 
-  declarePlayers();
+  declareplayers();
 
-  If Not Debug Then
-    DisableSRLDebug:=True else
-    DisableSRLDebug:=false;
+  smartShowConsole := false;
 
-  SmartEnableDrawing := True;
-  SRL_Events[EVENT_ANTIBAN] := @Antiban;
-  smartPlugins := ['OpenGL32.dll','d3d9.dll'];
-  SetupSRL;
+  if not debug then
+    disableSRLDebug := true else
+    disableSRLDebug := false;
 
-  If Not IsLoggedIn Then
-  Begin
-    If Not Players[CurrentPlayer].Login Then
-      TerminateScript;
+  smartEnableDrawing := true;
+  SRL_Events[EVENT_ANTIBAN] := @antiban;
+  setupSRL;
 
-    Writeln('Just loggedin, waiting a bit');
-    Wait(RandomRange(6000,10000));
-  End;
+  if not isLoggedIn then
+  begin
+    if not players[currentPlayer].login then
+      terminateScript;
 
-  ClearDebug;
+    writeln('Just loggedin, waiting a bit');
+    wait(randomRange(6000, 10000));
+  end;
 
-  MainScreen.SetAngle(MS_ANGLE_HIGH);
-  FindNormalRandoms;
+  clearDebug;
 
-  Timeout.Start;
-  StackCheck:=1;
+  mainScreen.setAngle(MS_ANGLE_HIGH);
+  findNormalrandoms;
 
-  Bir:= 13;      // ***Random minutes to add/subtract from how long until we break***
-  Bfr:= 7;       // ***Random minutes to add/subjtract from break duraction***
+  timeout.start;
+  stackCheck := 1;
 
-  W := (Players[CurrentPlayer].Integers[0] * 60000);
-  X := (Players[CurrentPlayer].Integers[1] * 60000);
-  Y := RandomRange(-BIR * 60000, BIR * 60000);
-  Z := RandomRange(-BFR * 60000, BFR * 60000);
+  bir := 13;      // ***random minutes to add/subtract from how long until we break***
+  bfr := 7;       // ***random minutes to add/subjtract from break duraction***
 
-  If conversationBox.continue(true, true) Then
-    Wait(RandomRange(3000,2000));
+  W := (players[currentPlayer].integers[0] * 60000);
+  X := (players[currentPlayer].integers[1] * 60000);
+  Y := randomRange(-BIR * 60000, BIR * 60000);
+  Z := randomRange(-BFR * 60000, BFR * 60000);
 
-  TabBackpack.Open;
+  if conversationBox.continue(true, true) then
+    wait(randomRange(3000, 2000));
 
-  StatsTimer.start();
-  StartingXP:=ChatBox.GetXPBar;
+  tabBackpack.Open;
 
-  FindNormalRandoms;
+  statsTimer.start();
+  startingXP := chatBox.getXPBar;
+
+  findNormalrandoms;
 
   print('slots: ' + toStr(slots));
-End;
+end;
 
-Procedure Mainloop;
-Begin
-  If Not IsLoggedIn Then
-  Begin
-    Wait(5000);
-     If Not Players[CurrentPlayer].Login Then
-        TerminateScript;
-    MainScreen.SetAngle(MS_ANGLE_HIGH);
-    Minimap.SetAngle(MM_DIRECTION_EAST);
-    Timeout.Reset;
-    Timeout.Start;
-  End;
+procedure mainloop;
+var
+  i: integer;
+begin
+  if not isLoggedIn then
+  begin
+    wait(5000);
+    writeln('Attempting to log back in');
+    disableSRLDebug := false;
+    repeat
+      try
+        players[currentPlayer].login;
+        inc(i);
+      except
+      end;
+      if (i = 7) then
+      begin
+        i := 0;
+        players.next(false);
+      end;
+    until isLoggedIn;
 
-  If Banking Then
-  Begin
-    FindNormalRandoms;
-    If MakeItems Then
-    Begin
-      ProgressReport;
-      FindNormalRandoms;
-    End;
-  End;
+    disableSRLDebug := true;
+    mainScreen.setAngle(MS_ANGLE_HIGH);
+    minimap.setAngle(MM_DIRECTION_EAST);
+    timeout.start;
+  end;
 
-  If Timeout.GetTime>300000 Then
-  Begin
-    Writeln('Nothing has happened for too long, shutting down!- took a screenshot, send pic to ashaman (in the logs folder)');
-    SaveScreenshot(ScriptPath + timeRunning() + '_' + 'HerbFail.png');
-    TerminateScript;
-  End;
+  if banking then
+  begin
+    findNormalrandoms;
+    if makeItems then
+    begin
+      progressReport;
+      findNormalrandoms;
+    end;
+  end;
 
-  If Players[CurrentPlayer].Booleans[0] Then
-    BreakHandler(Players[CurrentPlayer].Integers[0],Players[CurrentPlayer].Integers[1],Bir,Bfr);
-End;
+  if timeout.getTime > 300000 then
+  begin
+    writeln('nothing has happened for too long, shutting down!- took a screenshot, send pic to ashaman (in the logs folder)');
+    if debug then
+      saveScreenshot(scriptPath + timeRunning() + '_' + 'HerbFail.png');
+    terminateScript;
+  end;
 
-Begin
-  Setup;
-  While (Players.GetActive() > 0) Do
-    Mainloop;
-End.
+  if players[currentPlayer].Booleans[0] then
+    breakHandler(players[currentPlayer].integers[0], players[currentPlayer].integers[1], bir, bfr);
+end;
+
+begin
+  setup;
+  while (players.getActive() > 0) do
+    mainloop;
+end.
